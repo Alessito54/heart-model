@@ -1,9 +1,9 @@
 name: Modelops deploy
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
   repository_dispatch:
     types: [ml_ci_cd]
 jobs:
