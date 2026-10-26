@@ -274,3 +274,92 @@ pre {
   font-size: 0.82rem;
   color: var(--text-muted);
 }
+
+/* ---------- Selector de version del modelo ---------- */
+.versions {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 0 0 22px;
+  background: var(--surface-alt);
+}
+.versions legend {
+  padding: 0 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.version-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.version-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  min-height: 44px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+}
+.version-option input { position: absolute; opacity: 0; width: 0; height: 0; }
+.version-option.is-active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.version-option.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.version-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.version-main { font-weight: 600; font-size: 0.92rem; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.version-meta { font-size: 0.76rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pill {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.compare {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  font-size: 0.87rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.compare input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+
+/* ---------- Tabla comparativa ---------- */
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0 16px;
+  font-variant-numeric: tabular-nums;
+}
+.compare-table th, .compare-table td {
+  padding: 9px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.compare-table thead th {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.compare-table tbody th { font-weight: 700; }
+.compare-table tbody td {
+  font-family: ui-monospace, monospace;
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+.cell-error { color: var(--danger); font-size: 0.8rem; font-family: inherit; font-weight: 400; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

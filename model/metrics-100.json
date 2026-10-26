@@ -1,0 +1,25 @@
+{
+  "version": "100",
+  "dataset": "data/versions/heart-disease_100.csv",
+  "n_rows": 1025,
+  "n_train": 820,
+  "n_test": 205,
+  "accuracy": 0.8585365853658536,
+  "roc_auc": 0.8866666666666667,
+  "features": [
+    "age",
+    "sex",
+    "cp",
+    "trestbps",
+    "chol",
+    "fbs",
+    "restecg",
+    "thalach",
+    "exang",
+    "oldpeak",
+    "slope",
+    "ca",
+    "thal"
+  ],
+  "model_path": "model/heart-disease-100.joblib"
+}

@@ -17,8 +17,11 @@ data/heart-disease.csv ──► model/train.py ──► model/heart-disease-v1
 | Ruta | Contenido |
 |---|---|
 | `app.py` | API FastAPI: `GET /`, `GET /health`, `POST /score` |
-| `model/train.py` | Entrenamiento del `RandomForestClassifier` |
-| `model/heart-disease-v1.joblib` | Artefacto del modelo |
+| `model/train.py` | Entrenamiento de **una** versión del `RandomForestClassifier` |
+| `scripts/train_all_versions.py` | Entrena las tres versiones (25/50/100) |
+| `model/heart-disease-{25,50,100}.joblib` | Un artefacto por versión |
+| `model/metrics-{25,50,100}.json` | Métricas de cada versión |
+| `model/heart-disease-v1.joblib` | Copia de la versión por defecto (compatibilidad) |
 | `data/heart-disease.csv` | Dataset base (1025 registros, 13 variables + `target`) |
 | `scripts/make_datasets.py` | Genera las versiones al 25 %, 50 % y 100 % |
 | `scripts/test_model_curl.sh` | Pruebas del modelo desplegado con cURL |
@@ -31,7 +34,21 @@ data/heart-disease.csv ──► model/train.py ──► model/heart-disease-v1
 
 ## Contrato de la API
 
-`POST /score`
+El backend carga **las tres versiones del modelo** a la vez y las sirve desde el
+mismo despliegue.
+
+### `GET /models`
+
+```json
+[
+  {"version":"25","path":"model/heart-disease-25.joblib","is_default":false,
+   "n_rows":256,"accuracy":0.8846,"roc_auc":0.9289,"dataset":"data/versions/heart-disease_25.csv"},
+  {"version":"50", "...": "..."},
+  {"version":"100","is_default":true, "...": "..."}
+]
+```
+
+### `POST /score` y `POST /score?version=25|50|100`
 
 ```json
 {"age":64,"sex":1,"cp":3,"trestbps":120,"chol":267,"fbs":0,"restecg":0,
@@ -41,16 +58,28 @@ data/heart-disease.csv ──► model/train.py ──► model/heart-disease-v1
 Respuesta:
 
 ```json
-{"score": 0.3423109827696645}
+{"score": 0.3423109827696645, "version": "100"}
 ```
+
+Sin el parámetro `version` se usa la versión por defecto
+(`DEFAULT_MODEL_VERSION`, `100` si no se define). Una versión no cargada
+devuelve `404`; valores fuera de los rangos declarados, `422`.
+
+El mismo paciente contra las tres versiones:
+
+| Versión | Registros de entrenamiento | `score` |
+|---|---|---|
+| 25 % | 256 | 0.2990207072002889 |
+| 50 % | 512 | 0.4450901281006757 |
+| 100 % | 1025 | 0.3423109827696645 |
 
 `score` es `predict_proba` de la clase 1 (presencia de enfermedad): la proporción
 de árboles del bosque que votan por esa clase. **No es un riesgo clínico
-calibrado ni un porcentaje de riesgo.** Valores fuera de los rangos declarados
-devuelven `422`.
+calibrado ni un porcentaje de riesgo.** Las diferencias entre versiones provienen
+solo del volumen de datos de entrenamiento.
 
-`GET /health` devuelve `{"status","model_loaded","model_path","features"}`.
-Documentación interactiva en `/docs`.
+`GET /health` devuelve `{"status","model_loaded","model_path","model_versions",
+"default_version","features"}`. Documentación interactiva en `/docs`.
 
 ## Ejecución local
 
@@ -58,9 +87,9 @@ Documentación interactiva en `/docs`.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 
-python scripts/make_datasets.py      # genera data/versions/*.csv
-python model/train.py                # reentrena y guarda el modelo
-pytest tests/ -q                     # pruebas del backend
+python scripts/make_datasets.py       # genera data/versions/*.csv
+python scripts/train_all_versions.py  # entrena las 3 versiones del modelo
+pytest tests/ -q                      # pruebas del backend
 uvicorn app:app --reload --port 8000 # API en http://localhost:8000/docs
 ```
 
@@ -85,22 +114,45 @@ npm run build            # genera frontend/dist
 `VITE_API_URL` se incrusta en **tiempo de compilación**: tras cambiarla hay que
 reconstruir.
 
+El frontend consulta `GET /models` al cargar y muestra un selector con las
+versiones que el backend realmente sirve, además de un modo «comparar» que envía
+el mismo paciente a las tres y muestra los resultados en una tabla.
+
 ## Pipeline de GitHub Actions
 
 `.github/workflows/ml_ci_cd.yml` se dispara con `push` y `pull_request` sobre
 `main`, y con `repository_dispatch` de tipo `ml_ci_cd`. Tiene dos trabajos:
 
-1. **`train`** — instala dependencias, valida y descarga `client_payload.dataseturl`
-   (si llega), ejecuta `python model/train.py`, corre las pruebas y sube el
-   modelo como artefacto. No accede a ningún secreto.
-2. **`publish`** — descarga el artefacto, construye la imagen, hace un *smoke
-   test* del contenedor, inicia sesión en Docker Hub y publica la imagen.
+1. **`train`** — instala dependencias, prepara los tres datasets, ejecuta
+   `scripts/train_all_versions.py` (que llama a `model/train.py` una vez por
+   versión, escribiendo artefactos con nombres distintos), corre las pruebas y
+   sube los tres modelos como artefacto. No accede a ningún secreto.
+2. **`publish`** — descarga los artefactos, construye **una imagen que contiene
+   las tres versiones**, hace un *smoke test* que pide una predicción a cada una
+   y falla si las tres devuelven el mismo `score` (señal de que los artefactos se
+   sobrescribieron), inicia sesión en Docker Hub y publica.
    Se omite en `pull_request` (`if: github.event_name != 'pull_request'`), de
    modo que un PR no confiable nunca obtiene acceso a los secretos.
 
+### De dónde salen los tres datasets
+
+El paso «preparar datasets» resuelve la fuente en este orden:
+
+| Caso | `client_payload` | Comportamiento |
+|---|---|---|
+| 1 | `dataseturl_25`, `dataseturl_50`, `dataseturl_100` | Descarga las tres (deben estar las tres; si faltan, error) |
+| 2 | `dataseturl` | Descarga el dataset completo y **deriva** los subconjuntos con muestreo estratificado |
+| 3 | *(ninguno)* | Usa `data/heart-disease.csv` del repositorio y deriva los subconjuntos |
+
+Solo se aceptan URLs `https`. La URL nunca se imprime en los registros (puede
+llevar un token de Firebase).
+
 Etiqueta de la imagen: `client_payload.sha` si se recibe, y `github.sha` en caso
 contrario. La etiqueta se valida contra el formato permitido por Docker antes de
-usarse.
+usarse. Cada dispatch produce una etiqueta distinta, así que **las imágenes no se
+sobrescriben entre sí**; dentro de cada imagen, los tres modelos viven en
+archivos con nombres distintos y cada `metrics-<version>.json` registra de qué
+dataset salió.
 
 ### Secretos requeridos
 
@@ -127,8 +179,10 @@ curl -X POST https://api.github.com/repos/Alessito54/heart-model/dispatches \
   -d '{
         "event_type": "ml_ci_cd",
         "client_payload": {
-          "dataseturl": "https://.../heart-disease_100.csv",
-          "sha": "heart-disease-100"
+          "dataseturl_25":  "https://.../heart-disease_25.csv",
+          "dataseturl_50":  "https://.../heart-disease_50.csv",
+          "dataseturl_100": "https://.../heart-disease_100.csv",
+          "sha": "heart-disease-all"
         }
       }'
 ```
@@ -175,14 +229,15 @@ Cloudinary (alternativa mencionada en la práctica) sirve igual: subir como
 
 ## Despliegue en Render
 
+### Modo A (recomendado) — un servicio para las tres versiones
+
+La imagen publicada contiene los tres modelos, así que basta **un** servicio.
+
 **Backend** — *New → Web Service → Deploy an existing image*:
 
 - Imagen: `docker.io/<DOCKER_USER>/<MODEL_NAME>:<TAG>`
 - Health check path: `/health`
-
-El contenedor escucha en `$PORT` (y en el 80 si no se define), que es lo que
-Render inyecta. Para apuntar a otro dataset basta cambiar el `<TAG>` por el
-`sha` de la ejecución correspondiente y redesplegar.
+- Variable opcional: `DEFAULT_MODEL_VERSION` (`100` por defecto)
 
 **Frontend** — *New → Static Site*:
 
@@ -191,7 +246,26 @@ Render inyecta. Para apuntar a otro dataset basta cambiar el `<TAG>` por el
 - Publish directory: `dist`
 - Variable de entorno: `VITE_API_URL` = URL pública del backend
 
-`render.yaml` contiene el mismo despliegue como *blueprint*.
+El frontend llama a `GET /models` al cargar y construye el selector con lo que
+el backend diga que sirve. No hay nada más que configurar para las tres
+versiones.
+
+### Modo B — un servicio por versión
+
+Si prefieres un despliegue por etiqueta de imagen (tres dispatches con `sha`
+distintos), crea tres Web Services y define en el frontend:
+
+```
+VITE_API_URL_25=https://heart-model-25.onrender.com
+VITE_API_URL_50=https://heart-model-50.onrender.com
+VITE_API_URL_100=https://heart-model-100.onrender.com
+```
+
+Si alguna de esas tres variables está definida, el frontend enruta cada versión
+a su propio servicio y deja de enviar `?version=`. `VITE_API_URL` se ignora.
+
+El contenedor escucha en `$PORT` (y en el 80 si no se define), que es lo que
+Render inyecta. `render.yaml` contiene el modo A como *blueprint*.
 
 ## Pruebas del modelo con cURL
 
@@ -199,8 +273,9 @@ Render inyecta. Para apuntar a otro dataset basta cambiar el `<TAG>` por el
 ./scripts/test_model_curl.sh https://<tu-servicio>.onrender.com
 ```
 
-Envía siempre el mismo payload de referencia, de modo que la salida puede
-compararse entre despliegues entrenados con los datasets al 25 %, 50 % y 100 %.
+Envía el mismo payload de referencia a las tres versiones, imprime las tres
+salidas, comprueba que no son idénticas y verifica los códigos `404` (versión
+inexistente) y `422` (datos inválidos).
 
 ## Limitaciones del modelo
 

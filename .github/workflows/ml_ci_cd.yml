@@ -41,58 +41,91 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
 
-    - name: validar dataseturl
-      id: dataset
+    - name: preparar datasets (25 % / 50 % / 100 %)
       env:
         DATASET_URL: ${{ github.event.client_payload.dataseturl }}
+        DATASET_URL_25: ${{ github.event.client_payload.dataseturl_25 }}
+        DATASET_URL_50: ${{ github.event.client_payload.dataseturl_50 }}
+        DATASET_URL_100: ${{ github.event.client_payload.dataseturl_100 }}
       run: |
-        if [ -z "$DATASET_URL" ]; then
-          echo "No se recibio client_payload.dataseturl: se usara data/heart-disease.csv del repositorio."
-          echo "download=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-        case "$DATASET_URL" in
-          https://*) ;;
-          *)
-            echo "::error::client_payload.dataseturl debe ser una URL https. Recibido un valor con esquema no permitido."
+        set -euo pipefail
+        mkdir -p data/versions
+
+        # Solo se aceptan URLs https (la URL puede llevar token: nunca se imprime).
+        require_https() {
+          case "$1" in
+            https://*) ;;
+            *) echo "::error::$2 debe ser una URL https."; exit 1 ;;
+          esac
+        }
+
+        fetch() {
+          wget --no-verbose --tries=3 --timeout=30 -O "$2" "$1"
+          if [ ! -s "$2" ]; then
+            echo "::error::El dataset descargado en $2 esta vacio."
             exit 1
-            ;;
-        esac
-        echo "download=true" >> "$GITHUB_OUTPUT"
+          fi
+        }
 
-    - name: download dataset
-      if: steps.dataset.outputs.download == 'true'
-      env:
-        DATASET_URL: ${{ github.event.client_payload.dataseturl }}
-      run: |
-        mkdir -p data
-        # --no-verbose evita que wget imprima la URL completa (puede llevar token).
-        wget --no-verbose --tries=3 --timeout=30 -O data/heart-disease.csv "$DATASET_URL"
-        if [ ! -s data/heart-disease.csv ]; then
-          echo "::error::El dataset descargado esta vacio."
-          exit 1
+        n_urls=0
+        for u in "$DATASET_URL_25" "$DATASET_URL_50" "$DATASET_URL_100"; do
+          [ -n "$u" ] && n_urls=$((n_urls + 1))
+        done
+
+        if [ "$n_urls" -gt 0 ]; then
+          # Caso 1: se reciben las tres versiones ya preparadas (p. ej. Firebase).
+          if [ "$n_urls" -ne 3 ]; then
+            echo "::error::Se recibieron $n_urls de 3 URLs. Indica dataseturl_25, dataseturl_50 y dataseturl_100, o usa solo dataseturl."
+            exit 1
+          fi
+          echo "Fuente: client_payload.dataseturl_25 / _50 / _100"
+          require_https "$DATASET_URL_25"  "dataseturl_25"
+          require_https "$DATASET_URL_50"  "dataseturl_50"
+          require_https "$DATASET_URL_100" "dataseturl_100"
+          fetch "$DATASET_URL_25"  data/versions/heart-disease_25.csv
+          fetch "$DATASET_URL_50"  data/versions/heart-disease_50.csv
+          fetch "$DATASET_URL_100" data/versions/heart-disease_100.csv
+          cp data/versions/heart-disease_100.csv data/heart-disease.csv
+        elif [ -n "$DATASET_URL" ]; then
+          # Caso 2: se recibe un unico dataset completo; los subconjuntos se
+          # derivan aqui con muestreo estratificado.
+          echo "Fuente: client_payload.dataseturl (los subconjuntos se derivan en CI)"
+          require_https "$DATASET_URL" "dataseturl"
+          fetch "$DATASET_URL" data/heart-disease.csv
+          python scripts/make_datasets.py
+        else
+          # Caso 3: push o PR sin payload; se usa el dataset del repositorio.
+          echo "Sin client_payload: se usa data/heart-disease.csv del repositorio."
+          python scripts/make_datasets.py
         fi
 
-    - name: validar dataset
+    - name: validar datasets
       run: |
-        head -n 1 data/heart-disease.csv
-        echo "Registros (sin encabezado): $(( $(wc -l < data/heart-disease.csv) - 1 ))"
-        head -n 1 data/heart-disease.csv | grep -q 'target' || {
-          echo "::error::El dataset no contiene la columna 'target'."; exit 1; }
+        set -euo pipefail
+        for v in 25 50 100; do
+          f="data/versions/heart-disease_${v}.csv"
+          [ -f "$f" ] || { echo "::error::Falta $f"; exit 1; }
+          head -n 1 "$f" | grep -q 'target' || {
+            echo "::error::$f no contiene la columna 'target'."; exit 1; }
+          echo "$f -> $(( $(wc -l < "$f") - 1 )) registros"
+        done
 
-    - name: train model
-      run: python model/train.py
+    - name: train models (25 % / 50 % / 100 %)
+      run: python scripts/train_all_versions.py
 
     - name: test API
       run: python -m pytest tests/ -q
+
+    - name: listar artefactos
+      run: ls -la model/
 
     - name: upload model artifact
       uses: actions/upload-artifact@v4
       with:
         name: trained-model
         path: |
-          model/heart-disease-v1.joblib
-          model/metrics.json
+          model/heart-disease-*.joblib
+          model/metrics-*.json
         retention-days: 7
 
   # ---------------------------------------------------------------------------
@@ -153,22 +186,46 @@ jobs:
     - name: show images
       run: docker images
 
-    - name: smoke test de la imagen
+    - name: smoke test de la imagen (las 3 versiones)
       env:
         DOCKER_USER: ${{ secrets.DOCKER_USER }}
         MODEL_NAME: ${{ secrets.MODEL_NAME }}
         TAG: ${{ steps.meta.outputs.tag }}
       run: |
+        set -euo pipefail
         docker run -d --name heart-smoke -p 8000:80 "$DOCKER_USER/$MODEL_NAME:$TAG"
+        trap 'docker rm -f heart-smoke > /dev/null 2>&1 || true' EXIT
+
         for i in $(seq 1 30); do
           if curl -fsS http://localhost:8000/health > /dev/null; then break; fi
           sleep 2
         done
         curl -fsS http://localhost:8000/health
-        curl -fsS -X POST http://localhost:8000/score \
-          -H 'Content-Type: application/json' \
-          -d '{"age":64,"sex":1,"cp":3,"trestbps":120,"chol":267,"fbs":0,"restecg":0,"thalach":99,"exang":1,"oldpeak":1.8,"slope":1,"ca":2,"thal":2}'
-        docker rm -f heart-smoke
+        echo
+
+        echo "== versiones servidas =="
+        curl -fsS http://localhost:8000/models
+        echo
+
+        PAYLOAD='{"age":64,"sex":1,"cp":3,"trestbps":120,"chol":267,"fbs":0,"restecg":0,"thalach":99,"exang":1,"oldpeak":1.8,"slope":1,"ca":2,"thal":2}'
+        scores=""
+        for v in 25 50 100; do
+          body=$(curl -fsS -X POST "http://localhost:8000/score?version=$v" \
+            -H 'Content-Type: application/json' -d "$PAYLOAD")
+          echo "version $v -> $body"
+          echo "$body" | grep -q "\"version\":\"$v\"" || {
+            echo "::error::La version $v respondio con otra etiqueta de modelo."; exit 1; }
+          scores="$scores$(echo "$body" | sed -E 's/.*"score":([0-9.eE+-]+).*/\1/')\n"
+        done
+
+        # Tres modelos entrenados con volumenes distintos no deberian coincidir
+        # exactamente: si lo hacen, es que se publico el mismo artefacto 3 veces.
+        distinct=$(printf "$scores" | sort -u | wc -l)
+        if [ "$distinct" -lt 2 ]; then
+          echo "::error::Las 3 versiones devuelven el mismo score: probablemente se sobrescribieron los artefactos."
+          exit 1
+        fi
+        echo "OK: $distinct salidas distintas para el mismo payload."
 
     - name: docker login
       env:

@@ -2,8 +2,8 @@
   "openapi": "3.0.2",
   "info": {
     "title": "Heart Disease Prediction",
-    "description": "API de inferencia del modelo de prediccion de enfermedad cardiaca.",
-    "version": "1.0.0"
+    "description": "API de inferencia del modelo de prediccion de enfermedad cardiaca. Sirve las versiones entrenadas con el 25 %, 50 % y 100 % del dataset.",
+    "version": "2.0.0"
   },
   "paths": {
     "/": {
@@ -38,10 +38,46 @@
         }
       }
     },
+    "/models": {
+      "get": {
+        "summary": "Models",
+        "description": "Versiones del modelo disponibles en este despliegue, con sus metricas.",
+        "operationId": "models_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Models Models Get",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/score": {
       "post": {
         "summary": "Score",
         "operationId": "score_score_post",
+        "parameters": [
+          {
+            "description": "Version del modelo a usar (25, 50 o 100). Si se omite se usa la version por defecto.",
+            "required": false,
+            "schema": {
+              "title": "Version",
+              "type": "string",
+              "description": "Version del modelo a usar (25, 50 o 100). Si se omite se usa la version por defecto."
+            },
+            "name": "version",
+            "in": "query"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -202,6 +238,45 @@
           }
         }
       },
+      "ModelInfo": {
+        "title": "ModelInfo",
+        "required": [
+          "version",
+          "path",
+          "is_default"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "n_rows": {
+            "title": "N Rows",
+            "type": "integer"
+          },
+          "accuracy": {
+            "title": "Accuracy",
+            "type": "number"
+          },
+          "roc_auc": {
+            "title": "Roc Auc",
+            "type": "number"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          }
+        }
+      },
       "OutputData": {
         "title": "OutputData",
         "type": "object",
@@ -210,6 +285,11 @@
             "title": "Score",
             "type": "number",
             "default": 0.80318881046519
+          },
+          "version": {
+            "title": "Version",
+            "type": "string",
+            "default": "100"
           }
         }
       },

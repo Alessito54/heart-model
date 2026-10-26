@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app import FEATURES, app  # noqa: E402
+from app import DEFAULT_VERSION, FEATURES, MODELS, app  # noqa: E402
 
 client = TestClient(app)
 
@@ -17,11 +17,15 @@ VALID_PAYLOAD = {
     "ca": 2, "thal": 2,
 }
 
+AVAILABLE = sorted(MODELS, key=lambda v: (not v.isdigit(), int(v) if v.isdigit() else v))
+
 
 def test_root_lista_endpoints():
     response = client.get('/')
     assert response.status_code == 200
-    assert '/score' in response.json()['endpoints']
+    body = response.json()
+    assert '/score' in body['endpoints']
+    assert '/models' in body['endpoints']
 
 
 def test_health_reporta_modelo_cargado():
@@ -31,15 +35,60 @@ def test_health_reporta_modelo_cargado():
     assert body['status'] == 'ok'
     assert body['model_loaded'] is True
     assert body['features'] == FEATURES
+    assert body['default_version'] == DEFAULT_VERSION
+    assert body['model_versions'] == AVAILABLE
+
+
+def test_models_lista_versiones_con_metricas():
+    response = client.get('/models')
+    assert response.status_code == 200
+    body = response.json()
+    assert [m['version'] for m in body] == AVAILABLE
+    assert sum(1 for m in body if m['is_default']) == 1
+    for m in body:
+        assert m['path'].endswith('.joblib')
 
 
 def test_score_devuelve_probabilidad_en_rango():
     response = client.post('/score', json=VALID_PAYLOAD)
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {'score'}
+    assert set(body) == {'score', 'version'}
     assert isinstance(body['score'], float)
     assert 0.0 <= body['score'] <= 1.0
+
+
+def test_score_sin_version_usa_la_version_por_defecto():
+    assert client.post('/score', json=VALID_PAYLOAD).json()['version'] == DEFAULT_VERSION
+
+
+@pytest.mark.parametrize('version', AVAILABLE)
+def test_score_responde_para_cada_version(version):
+    response = client.post(f'/score?version={version}', json=VALID_PAYLOAD)
+    assert response.status_code == 200
+    body = response.json()
+    assert body['version'] == version
+    assert 0.0 <= body['score'] <= 1.0
+
+
+@pytest.mark.skipif(len(AVAILABLE) < 2, reason='requiere varias versiones cargadas')
+def test_las_versiones_son_modelos_distintos():
+    """Mismo payload, modelos entrenados con distinto volumen: no deben coincidir todos."""
+    scores = {v: client.post(f'/score?version={v}', json=VALID_PAYLOAD).json()['score']
+              for v in AVAILABLE}
+    assert len(set(scores.values())) > 1, f'Artefactos posiblemente duplicados: {scores}'
+
+
+@pytest.mark.skipif(len(AVAILABLE) < 2, reason='requiere varias versiones cargadas')
+def test_cada_version_carga_un_artefacto_distinto():
+    paths = [m['path'] for m in client.get('/models').json()]
+    assert len(set(paths)) == len(paths), f'Rutas repetidas: {paths}'
+
+
+def test_score_rechaza_version_desconocida():
+    response = client.post('/score?version=77', json=VALID_PAYLOAD)
+    assert response.status_code == 404
+    assert '77' in response.json()['detail']
 
 
 def test_score_es_determinista():
@@ -80,7 +129,7 @@ def test_score_usa_valores_por_defecto_si_falta_un_campo():
     assert 0.0 <= response.json()['score'] <= 1.0
 
 
-def test_openapi_documenta_score():
+def test_openapi_documenta_score_y_models():
     schema = client.get('/openapi.json').json()
-    assert '/score' in schema['paths']
     assert 'post' in schema['paths']['/score']
+    assert 'get' in schema['paths']['/models']

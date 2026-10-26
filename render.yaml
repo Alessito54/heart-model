@@ -1,5 +1,13 @@
 # Blueprint de Render para la practica de MLOps.
 # Importar desde Render -> New -> Blueprint, apuntando a este repositorio.
+#
+# Modo A (el de este archivo): UN backend que sirve las tres versiones del
+# modelo (25 %, 50 % y 100 %). La imagen publicada por GitHub Actions contiene
+# los tres artefactos, y el frontend elige con POST /score?version=25|50|100.
+#
+# Modo B (alternativa): un servicio por version. Duplicar el bloque del backend
+# tres veces con etiquetas de imagen distintas y definir en el frontend
+# VITE_API_URL_25 / _50 / _100 en lugar de VITE_API_URL. Ver README.
 services:
   # --- Backend: imagen publicada por GitHub Actions en Docker Hub ---------
   - type: web
@@ -8,13 +16,15 @@ services:
     plan: free
     image:
       # Sustituir <DOCKER_USER>/<MODEL_NAME>:<TAG> por la imagen real.
-      # El TAG es el valor de client_payload.sha usado en el dispatch
-      # (por ejemplo heart-disease-25 / -50 / -100).
+      # El TAG es el valor de client_payload.sha usado en el dispatch.
       url: docker.io/<DOCKER_USER>/<MODEL_NAME>:<TAG>
     healthCheckPath: /health
     envVars:
       - key: PORT
         value: 10000
+      # Version servida cuando POST /score no lleva el parametro ?version=
+      - key: DEFAULT_MODEL_VERSION
+        value: "100"
 
   # --- Frontend: sitio estatico construido con Vite -----------------------
   - type: web
@@ -24,9 +34,18 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     envVars:
-      # Debe apuntar a la URL publica del servicio heart-model-api.
+      # URL publica del servicio heart-model-api. El frontend descubre las
+      # versiones disponibles consultando GET /models.
       - key: VITE_API_URL
         sync: false
+      # Solo para el modo B (un despliegue por version). Dejar sin definir
+      # en el modo A: si se definen, el frontend deja de usar ?version=.
+      # - key: VITE_API_URL_25
+      #   sync: false
+      # - key: VITE_API_URL_50
+      #   sync: false
+      # - key: VITE_API_URL_100
+      #   sync: false
     routes:
       - type: rewrite
         source: /*

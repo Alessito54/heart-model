@@ -14,6 +14,8 @@ node_modules/
 frontend/dist/
 frontend/.env
 
-# Datasets generados y metricas
+# Datasets generados (se regeneran con scripts/make_datasets.py)
 data/versions/
-model/metrics.json
+
+# Los artefactos model/heart-disease-*.joblib y model/metrics-*.json SI se
+# versionan: la imagen Docker los necesita y hacen el repo autocontenido.
