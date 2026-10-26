@@ -1,0 +1,33 @@
+# Blueprint de Render para la practica de MLOps.
+# Importar desde Render -> New -> Blueprint, apuntando a este repositorio.
+services:
+  # --- Backend: imagen publicada por GitHub Actions en Docker Hub ---------
+  - type: web
+    name: heart-model-api
+    runtime: image
+    plan: free
+    image:
+      # Sustituir <DOCKER_USER>/<MODEL_NAME>:<TAG> por la imagen real.
+      # El TAG es el valor de client_payload.sha usado en el dispatch
+      # (por ejemplo heart-disease-25 / -50 / -100).
+      url: docker.io/<DOCKER_USER>/<MODEL_NAME>:<TAG>
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 10000
+
+  # --- Frontend: sitio estatico construido con Vite -----------------------
+  - type: web
+    name: heart-model-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # Debe apuntar a la URL publica del servicio heart-model-api.
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

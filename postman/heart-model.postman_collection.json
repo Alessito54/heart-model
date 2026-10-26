@@ -1,0 +1,128 @@
+{
+  "info": {
+    "name": "heart-model — MLOps",
+    "description": "Disparo del workflow ml_ci_cd via repository_dispatch y pruebas del modelo desplegado.\n\nVariables requeridas (ver heart-model.postman_environment.json):\n- github_user, github_repo, github_token (secret)\n- api_url (URL del backend en Render o local)\n- dataset_url_25 / dataset_url_50 / dataset_url_100",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "payload", "value": "{\"age\":64,\"sex\":1,\"cp\":3,\"trestbps\":120,\"chol\":267,\"fbs\":0,\"restecg\":0,\"thalach\":99,\"exang\":1,\"oldpeak\":1.8,\"slope\":1,\"ca\":2,\"thal\":2}" }
+  ],
+  "item": [
+    {
+      "name": "1. Disparar workflow",
+      "item": [
+        {
+          "name": "repository_dispatch — dataset 25%",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('GitHub acepta el dispatch (204)', () => pm.response.to.have.status(204));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{github_token}}" },
+              { "key": "Accept", "value": "application/vnd.github+json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"event_type\": \"ml_ci_cd\",\n  \"client_payload\": {\n    \"dataseturl\": \"{{dataset_url_25}}\",\n    \"sha\": \"heart-disease-25\"\n  }\n}" },
+            "url": { "raw": "https://api.github.com/repos/{{github_user}}/{{github_repo}}/dispatches", "protocol": "https", "host": ["api","github","com"], "path": ["repos","{{github_user}}","{{github_repo}}","dispatches"] }
+          }
+        },
+        {
+          "name": "repository_dispatch — dataset 50%",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('GitHub acepta el dispatch (204)', () => pm.response.to.have.status(204));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{github_token}}" },
+              { "key": "Accept", "value": "application/vnd.github+json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"event_type\": \"ml_ci_cd\",\n  \"client_payload\": {\n    \"dataseturl\": \"{{dataset_url_50}}\",\n    \"sha\": \"heart-disease-50\"\n  }\n}" },
+            "url": { "raw": "https://api.github.com/repos/{{github_user}}/{{github_repo}}/dispatches", "protocol": "https", "host": ["api","github","com"], "path": ["repos","{{github_user}}","{{github_repo}}","dispatches"] }
+          }
+        },
+        {
+          "name": "repository_dispatch — dataset 100%",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('GitHub acepta el dispatch (204)', () => pm.response.to.have.status(204));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{github_token}}" },
+              { "key": "Accept", "value": "application/vnd.github+json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"event_type\": \"ml_ci_cd\",\n  \"client_payload\": {\n    \"dataseturl\": \"{{dataset_url_100}}\",\n    \"sha\": \"heart-disease-100\"\n  }\n}" },
+            "url": { "raw": "https://api.github.com/repos/{{github_user}}/{{github_repo}}/dispatches", "protocol": "https", "host": ["api","github","com"], "path": ["repos","{{github_user}}","{{github_repo}}","dispatches"] }
+          }
+        },
+        {
+          "name": "Listar ejecuciones del workflow",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const runs = pm.response.json().workflow_runs || [];",
+            "pm.test('Hay al menos una ejecucion', () => pm.expect(runs.length).to.be.above(0));",
+            "if (runs.length) { console.log('ultima:', runs[0].status, runs[0].conclusion, runs[0].html_url); }"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{github_token}}" },
+              { "key": "Accept", "value": "application/vnd.github+json" }
+            ],
+            "url": { "raw": "https://api.github.com/repos/{{github_user}}/{{github_repo}}/actions/runs?per_page=5", "protocol": "https", "host": ["api","github","com"], "path": ["repos","{{github_user}}","{{github_repo}}","actions","runs"], "query": [{ "key": "per_page", "value": "5" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Probar el modelo",
+      "item": [
+        {
+          "name": "GET /health",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Modelo cargado', () => pm.expect(pm.response.json().model_loaded).to.eql(true));",
+            "pm.test('13 features', () => pm.expect(pm.response.json().features).to.have.lengthOf(13));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{api_url}}/health", "host": ["{{api_url}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "POST /score — payload valido",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Devuelve score numerico', () => pm.expect(body.score).to.be.a('number'));",
+            "pm.test('score en [0,1]', () => { pm.expect(body.score).to.be.at.least(0); pm.expect(body.score).to.be.at.most(1); });",
+            "console.log('score =', body.score);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{{payload}}" },
+            "url": { "raw": "{{api_url}}/score", "host": ["{{api_url}}"], "path": ["score"] }
+          }
+        },
+        {
+          "name": "POST /score — payload invalido (422)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"age\": 64, \"sex\": 9, \"cp\": 3, \"trestbps\": 120, \"chol\": 267,\n  \"fbs\": 0, \"restecg\": 0, \"thalach\": 99, \"exang\": 1,\n  \"oldpeak\": 1.8, \"slope\": 1, \"ca\": 2, \"thal\": 2\n}" },
+            "url": { "raw": "{{api_url}}/score", "host": ["{{api_url}}"], "path": ["score"] }
+          }
+        }
+      ]
+    }
+  ]
+}

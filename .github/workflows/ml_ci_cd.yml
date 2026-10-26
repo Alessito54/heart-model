@@ -1,4 +1,5 @@
 name: Modelops deploy
+
 on:
   push:
     branches: [ main ]
@@ -6,17 +7,196 @@ on:
     branches: [ main ]
   repository_dispatch:
     types: [ml_ci_cd]
+
+# Permisos minimos: el workflow solo necesita leer el codigo del repositorio.
+permissions:
+  contents: read
+
 jobs:
-  ml_ci_cd:
+  # ---------------------------------------------------------------------------
+  # 1) Entrenamiento: se ejecuta en push, pull_request y repository_dispatch.
+  #    No accede a ningun secreto, por lo que es seguro para PRs externos.
+  # ---------------------------------------------------------------------------
+  train:
+    name: Entrenar modelo
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8]
+        python-version: ['3.12']
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
           python-version: ${{ matrix.python-version }}
-    - name: list 
+          cache: pip
+
+    - name: python version
       run: python --version
+
+    - name: pip install
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+
+    - name: validar dataseturl
+      id: dataset
+      env:
+        DATASET_URL: ${{ github.event.client_payload.dataseturl }}
+      run: |
+        if [ -z "$DATASET_URL" ]; then
+          echo "No se recibio client_payload.dataseturl: se usara data/heart-disease.csv del repositorio."
+          echo "download=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        case "$DATASET_URL" in
+          https://*) ;;
+          *)
+            echo "::error::client_payload.dataseturl debe ser una URL https. Recibido un valor con esquema no permitido."
+            exit 1
+            ;;
+        esac
+        echo "download=true" >> "$GITHUB_OUTPUT"
+
+    - name: download dataset
+      if: steps.dataset.outputs.download == 'true'
+      env:
+        DATASET_URL: ${{ github.event.client_payload.dataseturl }}
+      run: |
+        mkdir -p data
+        # --no-verbose evita que wget imprima la URL completa (puede llevar token).
+        wget --no-verbose --tries=3 --timeout=30 -O data/heart-disease.csv "$DATASET_URL"
+        if [ ! -s data/heart-disease.csv ]; then
+          echo "::error::El dataset descargado esta vacio."
+          exit 1
+        fi
+
+    - name: validar dataset
+      run: |
+        head -n 1 data/heart-disease.csv
+        echo "Registros (sin encabezado): $(( $(wc -l < data/heart-disease.csv) - 1 ))"
+        head -n 1 data/heart-disease.csv | grep -q 'target' || {
+          echo "::error::El dataset no contiene la columna 'target'."; exit 1; }
+
+    - name: train model
+      run: python model/train.py
+
+    - name: test API
+      run: python -m pytest tests/ -q
+
+    - name: upload model artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: trained-model
+        path: |
+          model/heart-disease-v1.joblib
+          model/metrics.json
+        retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 2) Publicacion de la imagen: NO se ejecuta en pull_request, de modo que un PR
+  #    no confiable nunca obtiene acceso a los secretos de Docker Hub.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Construir y publicar imagen Docker
+    runs-on: ubuntu-latest
+    needs: train
+    if: github.event_name != 'pull_request'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: download model artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: trained-model
+        path: model
+
+    - name: resolver etiqueta de imagen
+      id: meta
+      env:
+        PAYLOAD_SHA: ${{ github.event.client_payload.sha }}
+        FALLBACK_SHA: ${{ github.sha }}
+      run: |
+        TAG="${PAYLOAD_SHA:-$FALLBACK_SHA}"
+        # Etiquetas Docker validas: [A-Za-z0-9_.-], max 128 caracteres.
+        if ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'; then
+          echo "::error::client_payload.sha no es una etiqueta Docker valida."
+          exit 1
+        fi
+        echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        echo "Etiqueta de imagen: $TAG"
+
+    - name: validar secretos
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      run: |
+        missing=""
+        [ -z "$DOCKER_USER" ] && missing="$missing DOCKER_USER"
+        [ -z "$DOCKER_PASSWORD" ] && missing="$missing DOCKER_PASSWORD"
+        [ -z "$MODEL_NAME" ] && missing="$missing MODEL_NAME"
+        if [ -n "$missing" ]; then
+          echo "::error::Faltan GitHub Secrets:$missing"
+          exit 1
+        fi
+
+    - name: docker build
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        MODEL_NAME: ${{ secrets.MODEL_NAME }}
+        TAG: ${{ steps.meta.outputs.tag }}
+      run: docker build -t "$DOCKER_USER/$MODEL_NAME:$TAG" .
+
+    - name: show images
+      run: docker images
+
+    - name: smoke test de la imagen
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        MODEL_NAME: ${{ secrets.MODEL_NAME }}
+        TAG: ${{ steps.meta.outputs.tag }}
+      run: |
+        docker run -d --name heart-smoke -p 8000:80 "$DOCKER_USER/$MODEL_NAME:$TAG"
+        for i in $(seq 1 30); do
+          if curl -fsS http://localhost:8000/health > /dev/null; then break; fi
+          sleep 2
+        done
+        curl -fsS http://localhost:8000/health
+        curl -fsS -X POST http://localhost:8000/score \
+          -H 'Content-Type: application/json' \
+          -d '{"age":64,"sex":1,"cp":3,"trestbps":120,"chol":267,"fbs":0,"restecg":0,"thalach":99,"exang":1,"oldpeak":1.8,"slope":1,"ca":2,"thal":2}'
+        docker rm -f heart-smoke
+
+    - name: docker login
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      # --password-stdin evita que la credencial quede en la linea de comandos.
+      run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+
+    - name: docker push
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        MODEL_NAME: ${{ secrets.MODEL_NAME }}
+        TAG: ${{ steps.meta.outputs.tag }}
+      run: docker push "$DOCKER_USER/$MODEL_NAME:$TAG"
+
+    - name: docker logout
+      if: always()
+      run: docker logout
+
+    - name: resumen
+      env:
+        MODEL_NAME: ${{ secrets.MODEL_NAME }}
+        TAG: ${{ steps.meta.outputs.tag }}
+      run: |
+        {
+          echo "### Imagen publicada"
+          echo ""
+          echo "- Evento: \`${{ github.event_name }}\`"
+          echo "- Repositorio de imagen: \`<DOCKER_USER>/$MODEL_NAME\`"
+          echo "- Etiqueta: \`$TAG\`"
+        } >> "$GITHUB_STEP_SUMMARY"
