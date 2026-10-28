@@ -1,0 +1,500 @@
+{
+  "anios": [
+    2015,
+    2025
+  ],
+  "meses": [
+    {
+      "numero": 1,
+      "nombre": "Enero"
+    },
+    {
+      "numero": 2,
+      "nombre": "Febrero"
+    },
+    {
+      "numero": 3,
+      "nombre": "Marzo"
+    },
+    {
+      "numero": 4,
+      "nombre": "Abril"
+    },
+    {
+      "numero": 5,
+      "nombre": "Mayo"
+    },
+    {
+      "numero": 6,
+      "nombre": "Junio"
+    },
+    {
+      "numero": 7,
+      "nombre": "Julio"
+    },
+    {
+      "numero": 8,
+      "nombre": "Agosto"
+    },
+    {
+      "numero": 9,
+      "nombre": "Septiembre"
+    },
+    {
+      "numero": 10,
+      "nombre": "Octubre"
+    },
+    {
+      "numero": 11,
+      "nombre": "Noviembre"
+    },
+    {
+      "numero": 12,
+      "nombre": "Diciembre"
+    }
+  ],
+  "entidades": [
+    {
+      "clave_ent": 1,
+      "entidad": "Aguascalientes"
+    },
+    {
+      "clave_ent": 2,
+      "entidad": "Baja California"
+    },
+    {
+      "clave_ent": 3,
+      "entidad": "Baja California Sur"
+    },
+    {
+      "clave_ent": 4,
+      "entidad": "Campeche"
+    },
+    {
+      "clave_ent": 5,
+      "entidad": "Coahuila de Zaragoza"
+    },
+    {
+      "clave_ent": 6,
+      "entidad": "Colima"
+    },
+    {
+      "clave_ent": 7,
+      "entidad": "Chiapas"
+    },
+    {
+      "clave_ent": 8,
+      "entidad": "Chihuahua"
+    },
+    {
+      "clave_ent": 9,
+      "entidad": "Ciudad de México"
+    },
+    {
+      "clave_ent": 10,
+      "entidad": "Durango"
+    },
+    {
+      "clave_ent": 11,
+      "entidad": "Guanajuato"
+    },
+    {
+      "clave_ent": 12,
+      "entidad": "Guerrero"
+    },
+    {
+      "clave_ent": 13,
+      "entidad": "Hidalgo"
+    },
+    {
+      "clave_ent": 14,
+      "entidad": "Jalisco"
+    },
+    {
+      "clave_ent": 15,
+      "entidad": "México"
+    },
+    {
+      "clave_ent": 16,
+      "entidad": "Michoacán de Ocampo"
+    },
+    {
+      "clave_ent": 17,
+      "entidad": "Morelos"
+    },
+    {
+      "clave_ent": 18,
+      "entidad": "Nayarit"
+    },
+    {
+      "clave_ent": 19,
+      "entidad": "Nuevo León"
+    },
+    {
+      "clave_ent": 20,
+      "entidad": "Oaxaca"
+    },
+    {
+      "clave_ent": 21,
+      "entidad": "Puebla"
+    },
+    {
+      "clave_ent": 22,
+      "entidad": "Querétaro"
+    },
+    {
+      "clave_ent": 23,
+      "entidad": "Quintana Roo"
+    },
+    {
+      "clave_ent": 24,
+      "entidad": "San Luis Potosí"
+    },
+    {
+      "clave_ent": 25,
+      "entidad": "Sinaloa"
+    },
+    {
+      "clave_ent": 26,
+      "entidad": "Sonora"
+    },
+    {
+      "clave_ent": 27,
+      "entidad": "Tabasco"
+    },
+    {
+      "clave_ent": 28,
+      "entidad": "Tamaulipas"
+    },
+    {
+      "clave_ent": 29,
+      "entidad": "Tlaxcala"
+    },
+    {
+      "clave_ent": 30,
+      "entidad": "Veracruz de Ignacio de la Llave"
+    },
+    {
+      "clave_ent": 31,
+      "entidad": "Yucatán"
+    },
+    {
+      "clave_ent": 32,
+      "entidad": "Zacatecas"
+    }
+  ],
+  "jerarquia": {
+    "El patrimonio": {
+      "Abuso de confianza": {
+        "Abuso de confianza": [
+          "Abuso de confianza"
+        ]
+      },
+      "Daño a la propiedad": {
+        "Daño a la propiedad": [
+          "Daño a la propiedad"
+        ]
+      },
+      "Despojo": {
+        "Despojo": [
+          "Despojo"
+        ]
+      },
+      "Extorsión": {
+        "Extorsión": [
+          "Extorsión"
+        ]
+      },
+      "Fraude": {
+        "Fraude": [
+          "Fraude"
+        ]
+      },
+      "Otros delitos contra el patrimonio": {
+        "Otros delitos contra el patrimonio": [
+          "Otros delitos contra el patrimonio"
+        ]
+      },
+      "Robo": {
+        "Otros robos": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo a casa habitación": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo a institución bancaria": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo a negocio": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo a transeúnte en espacio abierto al público": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo a transeúnte en vía pública": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo a transportista": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo de autopartes": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo de ganado": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo de maquinaria": [
+          "Robo de cables, tubos y otros objetos destinados a servicios públicos Con violencia",
+          "Robo de cables, tubos y otros objetos destinados a servicios públicos Sin violencia",
+          "Robo de herramienta industrial o agrícola Con violencia",
+          "Robo de herramienta industrial o agrícola Sin violencia",
+          "Robo de tractores Con violencia",
+          "Robo de tractores Sin violencia"
+        ],
+        "Robo de vehículo automotor": [
+          "Robo de coche de 4 ruedas Con violencia",
+          "Robo de coche de 4 ruedas Sin violencia",
+          "Robo de embarcaciones pequeñas y grandes Con violencia",
+          "Robo de embarcaciones pequeñas y grandes Sin violencia",
+          "Robo de motocicleta Con violencia",
+          "Robo de motocicleta Sin violencia"
+        ],
+        "Robo en transporte individual": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo en transporte público colectivo": [
+          "Con violencia",
+          "Sin violencia"
+        ],
+        "Robo en transporte público individual": [
+          "Con violencia",
+          "Sin violencia"
+        ]
+      }
+    },
+    "La familia": {
+      "Incumplimiento de obligaciones de asistencia familiar": {
+        "Incumplimiento de obligaciones de asistencia familiar": [
+          "Incumplimiento de obligaciones de asistencia familiar"
+        ]
+      },
+      "Otros delitos contra la familia": {
+        "Otros delitos contra la familia": [
+          "Otros delitos contra la familia"
+        ]
+      },
+      "Violencia de género en todas sus modalidades distinta a la violencia familiar": {
+        "Violencia de género en todas sus modalidades distinta a la violencia familiar": [
+          "Violencia de género en todas sus modalidades distinta a la violencia familiar"
+        ]
+      },
+      "Violencia familiar": {
+        "Violencia familiar": [
+          "Violencia familiar"
+        ]
+      }
+    },
+    "La libertad y la seguridad sexual": {
+      "Abuso sexual": {
+        "Abuso sexual": [
+          "Abuso sexual"
+        ]
+      },
+      "Acoso sexual": {
+        "Acoso sexual": [
+          "Acoso sexual"
+        ]
+      },
+      "Hostigamiento sexual": {
+        "Hostigamiento sexual": [
+          "Hostigamiento sexual"
+        ]
+      },
+      "Incesto": {
+        "Incesto": [
+          "Incesto"
+        ]
+      },
+      "Otros delitos que atentan contra la libertad y la seguridad sexual": {
+        "Otros delitos que atentan contra la libertad y la seguridad sexual": [
+          "Otros delitos que atentan contra la libertad y la seguridad sexual"
+        ]
+      },
+      "Violación equiparada": {
+        "Violación equiparada": [
+          "Violación equiparada"
+        ]
+      },
+      "Violación simple": {
+        "Violación simple": [
+          "Violación simple"
+        ]
+      }
+    },
+    "La sociedad": {
+      "Corrupción de menores": {
+        "Corrupción de menores": [
+          "Corrupción de menores"
+        ]
+      },
+      "Otros delitos contra la sociedad": {
+        "Otros delitos contra la sociedad": [
+          "Otros delitos contra la sociedad"
+        ]
+      },
+      "Trata de personas": {
+        "Trata de personas": [
+          "Trata de personas"
+        ]
+      }
+    },
+    "La vida y la Integridad corporal": {
+      "Aborto": {
+        "Aborto": [
+          "Aborto"
+        ]
+      },
+      "Feminicidio": {
+        "Feminicidio": [
+          "Con arma blanca",
+          "Con arma de fuego",
+          "Con otro elemento",
+          "No especificado"
+        ]
+      },
+      "Homicidio": {
+        "Homicidio culposo": [
+          "Con arma blanca",
+          "Con arma de fuego",
+          "Con otro elemento",
+          "En accidente de tránsito",
+          "No especificado"
+        ],
+        "Homicidio doloso": [
+          "Con arma blanca",
+          "Con arma de fuego",
+          "Con otro elemento",
+          "No especificado"
+        ]
+      },
+      "Lesiones": {
+        "Lesiones culposas": [
+          "Con arma blanca",
+          "Con arma de fuego",
+          "Con otro elemento",
+          "En accidente de tránsito",
+          "No especificado"
+        ],
+        "Lesiones dolosas": [
+          "Con arma blanca",
+          "Con arma de fuego",
+          "Con otro elemento",
+          "No especificado"
+        ]
+      },
+      "Otros delitos que atentan contra la vida y la integridad corporal": {
+        "Otros delitos que atentan contra la vida y la integridad corporal": [
+          "Otros delitos que atentan contra la vida y la integridad corporal"
+        ]
+      }
+    },
+    "Libertad personal": {
+      "Otros delitos que atentan contra la libertad personal": {
+        "Otros delitos que atentan contra la libertad personal": [
+          "Otros delitos que atentan contra la libertad personal"
+        ]
+      },
+      "Rapto": {
+        "Rapto": [
+          "Rapto"
+        ]
+      },
+      "Secuestro": {
+        "Secuestro": [
+          "Otro tipo de secuestros",
+          "Secuestro con calidad de rehén",
+          "Secuestro exprés",
+          "Secuestro extorsivo",
+          "Secuestro para causar daño"
+        ]
+      },
+      "Tráfico de menores": {
+        "Tráfico de menores": [
+          "Tráfico de menores"
+        ]
+      }
+    },
+    "Otros bienes jurídicos afectados (del fuero común)": {
+      "Allanamiento de morada": {
+        "Allanamiento de morada": [
+          "Allanamiento de morada"
+        ]
+      },
+      "Amenazas": {
+        "Amenazas": [
+          "Amenazas"
+        ]
+      },
+      "Contra el medio ambiente": {
+        "Contra el medio ambiente": [
+          "Contra el medio ambiente"
+        ]
+      },
+      "Delitos cometidos por servidores públicos": {
+        "Delitos cometidos por servidores públicos": [
+          "Delitos cometidos por servidores públicos"
+        ]
+      },
+      "Electorales": {
+        "Electorales": [
+          "Electorales"
+        ]
+      },
+      "Evasión de presos": {
+        "Evasión de presos": [
+          "Evasión de presos"
+        ]
+      },
+      "Falsedad": {
+        "Falsedad": [
+          "Falsedad"
+        ]
+      },
+      "Falsificación": {
+        "Falsificación": [
+          "Falsificación"
+        ]
+      },
+      "Narcomenudeo": {
+        "Narcomenudeo": [
+          "Narcomenudeo"
+        ]
+      },
+      "Otros delitos del Fuero Común": {
+        "Otros delitos del Fuero Común": [
+          "Otros delitos del Fuero Común"
+        ]
+      }
+    }
+  },
+  "label": "incidencia_delictiva",
+  "features": [
+    "anio",
+    "mes",
+    "clave_ent",
+    "bien_juridico_afectado",
+    "tipo_delito",
+    "subtipo_delito",
+    "modalidad"
+  ]
+}

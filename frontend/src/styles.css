@@ -363,3 +363,102 @@ pre {
   padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+.status-waking .status-dot { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.placeholder-hint {
+  font-size: 0.78rem;
+  text-align: center;
+  max-width: 34ch;
+  color: var(--text-muted);
+}
+
+/* --- Columna principal: tarjetas apiladas (modelos, consulta, reentreno) -- */
+.main-col { display: grid; gap: 24px; min-width: 0; }
+
+/* --- Los tres modelos entrenados ----------------------------------------- */
+.model-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin: 14px 0 0;
+}
+.model-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--surface-alt);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.model-card.is-active { border-color: var(--accent); }
+.model-card header { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.model-card h3 { margin: 0; font-size: 0.98rem; }
+.model-rows {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.model-metrics { display: flex; flex-wrap: wrap; gap: 14px; margin: 0; }
+.model-metrics div { display: flex; flex-direction: column; }
+.model-metrics dt {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 700;
+  cursor: help;
+}
+.model-metrics dd {
+  margin: 2px 0 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.model-baseline { margin: 0; font-size: 0.76rem; color: var(--text-muted); }
+.model-path { margin: 0; font-size: 0.7rem; overflow-wrap: anywhere; }
+.model-path code { font-size: 0.7rem; }
+
+/* --- Campos que ocupan toda la fila (etiquetas largas del catalogo) ------ */
+.field-wide { grid-column: 1 / -1; }
+
+/* --- Aviso no bloqueante (p. ej. extrapolacion fuera del rango) ---------- */
+.warning {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 0.84rem;
+}
+
+/* --- Panel de reentrenamiento -------------------------------------------- */
+.retrain-card .grid { margin-top: 14px; }
+.retrain-datasets {
+  margin: 4px 0 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--surface-alt);
+}
+.retrain-datasets summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+.retrain-datasets .grid { margin: 12px 0; }
+.retrain-datasets input { font-size: 0.78rem; }
+.pill-ok {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  border-color: var(--ok);
+  color: inherit;
+}
+.pill-off { background: var(--surface-alt); color: var(--text-muted); }
+.alert-ok { border-color: var(--ok); }
+.alert-ok strong { color: var(--ok); }
+.alert-info { border-color: var(--border); }
+.alert-info strong { color: inherit; }
+.alert-info p, .alert-ok p { color: var(--text-muted); }
+.alert-info code { font-size: 0.78rem; }
+.runs-table { margin-top: 6px; }
+.runs-table td { font-size: 0.8rem; font-family: inherit; font-weight: 400; }
+.runs-table a { color: var(--accent); }

@@ -2,21 +2,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: heartmodel-deployment
+  name: incidenciamodel-deployment
 spec:
   selector:
     matchLabels:
-      app: heartmodel-server
+      app: incidenciamodel-server
   replicas: 3
   template:
     metadata:
       labels:
-        app: heartmodel-server
+        app: incidenciamodel-server
     spec:
       containers:
-      - name: heartmodel-container
+      - name: incidenciamodel-container
         #image: gcr.io/tensorflow-serving/resnet 
-        image: docker.io/adsoft/heart-model:latest
+        image: docker.io/<DOCKER_USER>/<MODEL_NAME>:latest
         ports:
         - containerPort: 80
 ---
@@ -24,12 +24,12 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    run: heartmodel-service
-  name: heartmodel-service
+    run: incidenciamodel-service
+  name: incidenciamodel-service
 spec:
   ports:
   - port: 80
     targetPort: 80
   selector:
-    app: heartmodel-server
+    app: incidenciamodel-server
   type: LoadBalancer

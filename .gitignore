@@ -14,8 +14,15 @@ node_modules/
 frontend/dist/
 frontend/.env
 
-# Datasets generados (se regeneran con scripts/make_datasets.py)
+# Datasets generados (se regeneran con scripts/make_datasets.py y viven en
+# Cloudinary, desde donde los descarga el workflow de CI).
 data/versions/
 
-# Los artefactos model/heart-disease-*.joblib y model/metrics-*.json SI se
-# versionan: la imagen Docker los necesita y hacen el repo autocontenido.
+# Dataset de origen del SESNSP: 56 MB, demasiado grande para el repositorio.
+# Se descarga con client_payload.dataseturl cuando hace falta regenerar las
+# tablas de consulta.
+data/INM_estatal_dic25.csv
+
+# SI se versionan, porque el workflow y la imagen Docker los necesitan:
+#   data/catalogo_delitos.csv    data/catalogo_entidades.csv   (9 KB en total)
+#   model/incidencia-*.joblib    model/metrics-*.json    model/catalog.json

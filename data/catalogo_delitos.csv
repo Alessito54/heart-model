@@ -1,0 +1,99 @@
+id_delito,bien_juridico_afectado,tipo_delito,subtipo_delito,modalidad
+0,El patrimonio,Abuso de confianza,Abuso de confianza,Abuso de confianza
+1,El patrimonio,Daño a la propiedad,Daño a la propiedad,Daño a la propiedad
+2,El patrimonio,Despojo,Despojo,Despojo
+3,El patrimonio,Extorsión,Extorsión,Extorsión
+4,El patrimonio,Fraude,Fraude,Fraude
+5,El patrimonio,Otros delitos contra el patrimonio,Otros delitos contra el patrimonio,Otros delitos contra el patrimonio
+6,El patrimonio,Robo,Otros robos,Con violencia
+7,El patrimonio,Robo,Otros robos,Sin violencia
+8,El patrimonio,Robo,Robo a casa habitación,Con violencia
+9,El patrimonio,Robo,Robo a casa habitación,Sin violencia
+10,El patrimonio,Robo,Robo a institución bancaria,Con violencia
+11,El patrimonio,Robo,Robo a institución bancaria,Sin violencia
+12,El patrimonio,Robo,Robo a negocio,Con violencia
+13,El patrimonio,Robo,Robo a negocio,Sin violencia
+14,El patrimonio,Robo,Robo a transeúnte en espacio abierto al público,Con violencia
+15,El patrimonio,Robo,Robo a transeúnte en espacio abierto al público,Sin violencia
+16,El patrimonio,Robo,Robo a transeúnte en vía pública,Con violencia
+17,El patrimonio,Robo,Robo a transeúnte en vía pública,Sin violencia
+18,El patrimonio,Robo,Robo a transportista,Con violencia
+19,El patrimonio,Robo,Robo a transportista,Sin violencia
+20,El patrimonio,Robo,Robo de autopartes,Con violencia
+21,El patrimonio,Robo,Robo de autopartes,Sin violencia
+22,El patrimonio,Robo,Robo de ganado,Con violencia
+23,El patrimonio,Robo,Robo de ganado,Sin violencia
+24,El patrimonio,Robo,Robo de maquinaria,"Robo de cables, tubos y otros objetos destinados a servicios públicos Con violencia"
+25,El patrimonio,Robo,Robo de maquinaria,"Robo de cables, tubos y otros objetos destinados a servicios públicos Sin violencia"
+26,El patrimonio,Robo,Robo de maquinaria,Robo de herramienta industrial o agrícola Con violencia
+27,El patrimonio,Robo,Robo de maquinaria,Robo de herramienta industrial o agrícola Sin violencia
+28,El patrimonio,Robo,Robo de maquinaria,Robo de tractores Con violencia
+29,El patrimonio,Robo,Robo de maquinaria,Robo de tractores Sin violencia
+30,El patrimonio,Robo,Robo de vehículo automotor,Robo de coche de 4 ruedas Con violencia
+31,El patrimonio,Robo,Robo de vehículo automotor,Robo de coche de 4 ruedas Sin violencia
+32,El patrimonio,Robo,Robo de vehículo automotor,Robo de embarcaciones pequeñas y grandes Con violencia
+33,El patrimonio,Robo,Robo de vehículo automotor,Robo de embarcaciones pequeñas y grandes Sin violencia
+34,El patrimonio,Robo,Robo de vehículo automotor,Robo de motocicleta Con violencia
+35,El patrimonio,Robo,Robo de vehículo automotor,Robo de motocicleta Sin violencia
+36,El patrimonio,Robo,Robo en transporte individual,Con violencia
+37,El patrimonio,Robo,Robo en transporte individual,Sin violencia
+38,El patrimonio,Robo,Robo en transporte público colectivo,Con violencia
+39,El patrimonio,Robo,Robo en transporte público colectivo,Sin violencia
+40,El patrimonio,Robo,Robo en transporte público individual,Con violencia
+41,El patrimonio,Robo,Robo en transporte público individual,Sin violencia
+42,La familia,Incumplimiento de obligaciones de asistencia familiar,Incumplimiento de obligaciones de asistencia familiar,Incumplimiento de obligaciones de asistencia familiar
+43,La familia,Otros delitos contra la familia,Otros delitos contra la familia,Otros delitos contra la familia
+44,La familia,Violencia de género en todas sus modalidades distinta a la violencia familiar,Violencia de género en todas sus modalidades distinta a la violencia familiar,Violencia de género en todas sus modalidades distinta a la violencia familiar
+45,La familia,Violencia familiar,Violencia familiar,Violencia familiar
+46,La libertad y la seguridad sexual,Abuso sexual,Abuso sexual,Abuso sexual
+47,La libertad y la seguridad sexual,Acoso sexual,Acoso sexual,Acoso sexual
+48,La libertad y la seguridad sexual,Hostigamiento sexual,Hostigamiento sexual,Hostigamiento sexual
+49,La libertad y la seguridad sexual,Incesto,Incesto,Incesto
+50,La libertad y la seguridad sexual,Otros delitos que atentan contra la libertad y la seguridad sexual,Otros delitos que atentan contra la libertad y la seguridad sexual,Otros delitos que atentan contra la libertad y la seguridad sexual
+51,La libertad y la seguridad sexual,Violación equiparada,Violación equiparada,Violación equiparada
+52,La libertad y la seguridad sexual,Violación simple,Violación simple,Violación simple
+53,La sociedad,Corrupción de menores,Corrupción de menores,Corrupción de menores
+54,La sociedad,Otros delitos contra la sociedad,Otros delitos contra la sociedad,Otros delitos contra la sociedad
+55,La sociedad,Trata de personas,Trata de personas,Trata de personas
+56,La vida y la Integridad corporal,Aborto,Aborto,Aborto
+57,La vida y la Integridad corporal,Feminicidio,Feminicidio,Con arma blanca
+58,La vida y la Integridad corporal,Feminicidio,Feminicidio,Con arma de fuego
+59,La vida y la Integridad corporal,Feminicidio,Feminicidio,Con otro elemento
+60,La vida y la Integridad corporal,Feminicidio,Feminicidio,No especificado
+61,La vida y la Integridad corporal,Homicidio,Homicidio culposo,Con arma blanca
+62,La vida y la Integridad corporal,Homicidio,Homicidio culposo,Con arma de fuego
+63,La vida y la Integridad corporal,Homicidio,Homicidio culposo,Con otro elemento
+64,La vida y la Integridad corporal,Homicidio,Homicidio culposo,En accidente de tránsito
+65,La vida y la Integridad corporal,Homicidio,Homicidio culposo,No especificado
+66,La vida y la Integridad corporal,Homicidio,Homicidio doloso,Con arma blanca
+67,La vida y la Integridad corporal,Homicidio,Homicidio doloso,Con arma de fuego
+68,La vida y la Integridad corporal,Homicidio,Homicidio doloso,Con otro elemento
+69,La vida y la Integridad corporal,Homicidio,Homicidio doloso,No especificado
+70,La vida y la Integridad corporal,Lesiones,Lesiones culposas,Con arma blanca
+71,La vida y la Integridad corporal,Lesiones,Lesiones culposas,Con arma de fuego
+72,La vida y la Integridad corporal,Lesiones,Lesiones culposas,Con otro elemento
+73,La vida y la Integridad corporal,Lesiones,Lesiones culposas,En accidente de tránsito
+74,La vida y la Integridad corporal,Lesiones,Lesiones culposas,No especificado
+75,La vida y la Integridad corporal,Lesiones,Lesiones dolosas,Con arma blanca
+76,La vida y la Integridad corporal,Lesiones,Lesiones dolosas,Con arma de fuego
+77,La vida y la Integridad corporal,Lesiones,Lesiones dolosas,Con otro elemento
+78,La vida y la Integridad corporal,Lesiones,Lesiones dolosas,No especificado
+79,La vida y la Integridad corporal,Otros delitos que atentan contra la vida y la integridad corporal,Otros delitos que atentan contra la vida y la integridad corporal,Otros delitos que atentan contra la vida y la integridad corporal
+80,Libertad personal,Otros delitos que atentan contra la libertad personal,Otros delitos que atentan contra la libertad personal,Otros delitos que atentan contra la libertad personal
+81,Libertad personal,Rapto,Rapto,Rapto
+82,Libertad personal,Secuestro,Secuestro,Otro tipo de secuestros
+83,Libertad personal,Secuestro,Secuestro,Secuestro con calidad de rehén
+84,Libertad personal,Secuestro,Secuestro,Secuestro exprés
+85,Libertad personal,Secuestro,Secuestro,Secuestro extorsivo
+86,Libertad personal,Secuestro,Secuestro,Secuestro para causar daño
+87,Libertad personal,Tráfico de menores,Tráfico de menores,Tráfico de menores
+88,Otros bienes jurídicos afectados (del fuero común),Allanamiento de morada,Allanamiento de morada,Allanamiento de morada
+89,Otros bienes jurídicos afectados (del fuero común),Amenazas,Amenazas,Amenazas
+90,Otros bienes jurídicos afectados (del fuero común),Contra el medio ambiente,Contra el medio ambiente,Contra el medio ambiente
+91,Otros bienes jurídicos afectados (del fuero común),Delitos cometidos por servidores públicos,Delitos cometidos por servidores públicos,Delitos cometidos por servidores públicos
+92,Otros bienes jurídicos afectados (del fuero común),Electorales,Electorales,Electorales
+93,Otros bienes jurídicos afectados (del fuero común),Evasión de presos,Evasión de presos,Evasión de presos
+94,Otros bienes jurídicos afectados (del fuero común),Falsedad,Falsedad,Falsedad
+95,Otros bienes jurídicos afectados (del fuero común),Falsificación,Falsificación,Falsificación
+96,Otros bienes jurídicos afectados (del fuero común),Narcomenudeo,Narcomenudeo,Narcomenudeo
+97,Otros bienes jurídicos afectados (del fuero común),Otros delitos del Fuero Común,Otros delitos del Fuero Común,Otros delitos del Fuero Común

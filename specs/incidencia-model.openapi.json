@@ -1,0 +1,530 @@
+{
+  "openapi": "3.0.2",
+  "info": {
+    "title": "Incidencia Delictiva Estatal",
+    "description": "API de inferencia del modelo de incidencia delictiva estatal (SESNSP, 2015-2025). Predice el numero de carpetas de investigacion abiertas en un estado, un mes y una modalidad de delito. Sirve las versiones entrenadas con el 25 %, 50 % y 100 % del dataset, y permite reentrenar: cada reentrenamiento publica una imagen de Docker nueva.",
+    "version": "3.0.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog": {
+      "get": {
+        "summary": "Catalog",
+        "description": "Valores validos de cada campo, con la jerarquia del delito anidada.\n\nEl frontend lo usa para poblar listas desplegables encadenadas, de modo que\nno se pueda enviar una combinacion de delito inexistente.",
+        "operationId": "catalog_catalog_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models": {
+      "get": {
+        "summary": "Models",
+        "description": "Versiones del modelo disponibles en este despliegue, con sus metricas.",
+        "operationId": "models_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Models Models Get",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/predict": {
+      "post": {
+        "summary": "Predict",
+        "description": "Estima las carpetas de investigacion de un estado, mes y delito.",
+        "operationId": "predict_predict_post",
+        "parameters": [
+          {
+            "description": "Version del modelo a usar (25, 50 o 100). Si se omite se usa la version por defecto.",
+            "required": false,
+            "schema": {
+              "title": "Version",
+              "type": "string",
+              "description": "Version del modelo a usar (25, 50 o 100). Si se omite se usa la version por defecto."
+            },
+            "name": "version",
+            "in": "query"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputData"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retrain": {
+      "post": {
+        "summary": "Retrain",
+        "description": "Lanza un reentrenamiento que publica una imagen de Docker nueva.\n\nNo entrena dentro de este contenedor: dispara el workflow de GitHub Actions\n(repository_dispatch), que reentrena las tres versiones del modelo,\nconstruye la imagen y la publica etiquetada con \"tag\". Cada reentrenamiento\nproduce por tanto una imagen distinta e inmutable.",
+        "operationId": "retrain_retrain_post",
+        "parameters": [
+          {
+            "required": false,
+            "schema": {
+              "title": "X-Retrain-Token",
+              "type": "string"
+            },
+            "name": "X-Retrain-Token",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrainResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/retrain/status": {
+      "get": {
+        "summary": "Retrain Status",
+        "description": "Ultimas corridas del workflow de reentrenamiento, con su etiqueta.",
+        "operationId": "retrain_status_retrain_status_get",
+        "parameters": [
+          {
+            "required": false,
+            "schema": {
+              "title": "Limit",
+              "maximum": 20.0,
+              "minimum": 1.0,
+              "type": "integer",
+              "default": 5
+            },
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": {
+              "title": "X-Retrain-Token",
+              "type": "string"
+            },
+            "name": "X-Retrain-Token",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "title": "HTTPValidationError",
+        "type": "object",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            }
+          }
+        }
+      },
+      "InputData": {
+        "title": "InputData",
+        "type": "object",
+        "properties": {
+          "anio": {
+            "title": "Anio",
+            "maximum": 2100.0,
+            "minimum": 1990.0,
+            "type": "integer",
+            "description": "Anio del periodo (el dataset cubre 2015-2025)",
+            "default": 2025
+          },
+          "mes": {
+            "title": "Mes",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "type": "integer",
+            "description": "Mes del periodo (1 = Enero)",
+            "default": 6
+          },
+          "clave_ent": {
+            "title": "Clave Ent",
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "type": "integer",
+            "description": "Clave de la entidad federativa (1-32). Alternativa a \"entidad\".",
+            "default": 9
+          },
+          "entidad": {
+            "title": "Entidad",
+            "type": "string",
+            "description": "Nombre de la entidad federativa. Alternativa a \"clave_ent\"."
+          },
+          "bien_juridico_afectado": {
+            "title": "Bien Juridico Afectado",
+            "type": "string",
+            "description": "Bien juridico afectado",
+            "default": "El patrimonio"
+          },
+          "tipo_delito": {
+            "title": "Tipo Delito",
+            "type": "string",
+            "description": "Tipo de delito",
+            "default": "Robo"
+          },
+          "subtipo_delito": {
+            "title": "Subtipo Delito",
+            "type": "string",
+            "description": "Subtipo de delito",
+            "default": "Robo de vehículo automotor"
+          },
+          "modalidad": {
+            "title": "Modalidad",
+            "type": "string",
+            "description": "Modalidad del delito",
+            "default": "Robo de coche de 4 ruedas Con violencia"
+          }
+        },
+        "example": {
+          "anio": 2025,
+          "mes": 6,
+          "clave_ent": 9,
+          "bien_juridico_afectado": "El patrimonio",
+          "tipo_delito": "Robo",
+          "subtipo_delito": "Robo de vehículo automotor",
+          "modalidad": "Robo de coche de 4 ruedas Con violencia"
+        }
+      },
+      "ModelInfo": {
+        "title": "ModelInfo",
+        "required": [
+          "version",
+          "path",
+          "is_default"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "n_rows": {
+            "title": "N Rows",
+            "type": "integer"
+          },
+          "mae": {
+            "title": "Mae",
+            "type": "number"
+          },
+          "rmse": {
+            "title": "Rmse",
+            "type": "number"
+          },
+          "r2": {
+            "title": "R2",
+            "type": "number"
+          },
+          "baseline_mae": {
+            "title": "Baseline Mae",
+            "type": "number"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          }
+        }
+      },
+      "OutputData": {
+        "title": "OutputData",
+        "required": [
+          "prediccion",
+          "prediccion_redondeada",
+          "version",
+          "entidad",
+          "periodo"
+        ],
+        "type": "object",
+        "properties": {
+          "prediccion": {
+            "title": "Prediccion",
+            "type": "number",
+            "description": "Carpetas de investigacion estimadas"
+          },
+          "prediccion_redondeada": {
+            "title": "Prediccion Redondeada",
+            "type": "integer",
+            "description": "La prediccion redondeada a entero"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string",
+            "description": "Version del modelo que respondio"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string",
+            "description": "Variable predicha",
+            "default": "incidencia_delictiva"
+          },
+          "entidad": {
+            "title": "Entidad",
+            "type": "string",
+            "description": "Entidad resuelta"
+          },
+          "periodo": {
+            "title": "Periodo",
+            "type": "string",
+            "description": "Periodo consultado, como \"Junio 2025\""
+          }
+        }
+      },
+      "RetrainRequest": {
+        "title": "RetrainRequest",
+        "type": "object",
+        "properties": {
+          "dataseturl": {
+            "title": "Dataseturl",
+            "type": "string",
+            "description": "URL del dataset completo"
+          },
+          "dataseturl_25": {
+            "title": "Dataseturl 25",
+            "type": "string",
+            "description": "URL del dataset al 25 %"
+          },
+          "dataseturl_50": {
+            "title": "Dataseturl 50",
+            "type": "string",
+            "description": "URL del dataset al 50 %"
+          },
+          "dataseturl_100": {
+            "title": "Dataseturl 100",
+            "type": "string",
+            "description": "URL del dataset al 100 %"
+          },
+          "tag": {
+            "title": "Tag",
+            "type": "string",
+            "description": "Etiqueta de la imagen Docker. Si se omite, se genera una."
+          },
+          "nota": {
+            "title": "Nota",
+            "maxLength": 200,
+            "type": "string",
+            "description": "Nota libre para identificar la corrida"
+          }
+        },
+        "description": "Datasets con los que reentrenar. Se esperan URL de Cloudinary (https).\n\nHay dos modos:\n  - las tres versiones ya preparadas: dataseturl_25 + _50 + _100\n  - un unico dataset completo: dataseturl (los subconjuntos se derivan en CI)\nSi no se envia ninguna URL, el workflow reentrena con el dataset del repositorio."
+      },
+      "RetrainResponse": {
+        "title": "RetrainResponse",
+        "required": [
+          "dispatched",
+          "tag",
+          "repository",
+          "dispatch_type",
+          "datasets",
+          "actions_url",
+          "mensaje"
+        ],
+        "type": "object",
+        "properties": {
+          "dispatched": {
+            "title": "Dispatched",
+            "type": "boolean"
+          },
+          "tag": {
+            "title": "Tag",
+            "type": "string"
+          },
+          "repository": {
+            "title": "Repository",
+            "type": "string"
+          },
+          "dispatch_type": {
+            "title": "Dispatch Type",
+            "type": "string"
+          },
+          "datasets": {
+            "title": "Datasets",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "actions_url": {
+            "title": "Actions Url",
+            "type": "string"
+          },
+          "mensaje": {
+            "title": "Mensaje",
+            "type": "string"
+          }
+        }
+      },
+      "ValidationError": {
+        "title": "ValidationError",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "loc": {
+            "title": "Location",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local"
+    },
+    {
+      "url": "https://incidencia-model-api.onrender.com",
+      "description": "Render"
+    }
+  ]
+}

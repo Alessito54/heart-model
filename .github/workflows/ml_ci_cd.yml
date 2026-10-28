@@ -7,10 +7,24 @@ on:
     branches: [ main ]
   repository_dispatch:
     types: [ml_ci_cd]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Etiqueta de la imagen Docker (por defecto, el sha del commit)'
+        required: false
 
 # Permisos minimos: el workflow solo necesita leer el codigo del repositorio.
 permissions:
   contents: read
+
+# URLs de Cloudinary de las tres versiones del dataset. Se usan cuando el
+# evento no trae client_payload (push, pull_request, workflow_dispatch). El
+# endpoint POST /retrain de la API las reenvia en client_payload para que un
+# reentrenamiento pueda apuntar a datasets nuevos sin tocar este archivo.
+env:
+  CLOUDINARY_25: https://res.cloudinary.com/dvkzq6c8a/raw/upload/v1793196213/incidencia_25_hmvvv6.csv
+  CLOUDINARY_50: https://res.cloudinary.com/dvkzq6c8a/raw/upload/v1793196216/incidencia_50_hbf5b7.csv
+  CLOUDINARY_100: https://res.cloudinary.com/dvkzq6c8a/raw/upload/v1793196218/incidencia_100_owtcfa.csv
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -43,7 +57,11 @@ jobs:
 
     - name: preparar datasets (25 % / 50 % / 100 %)
       env:
+        # Dataset de origen del SESNSP, con las categorias en texto. Si se envia,
+        # se regeneran las tablas de consulta y las tres versiones.
         DATASET_URL: ${{ github.event.client_payload.dataseturl }}
+        # Las tres versiones ya codificadas (columna id_delito). El payload gana
+        # sobre las URLs de Cloudinary por defecto.
         DATASET_URL_25: ${{ github.event.client_payload.dataseturl_25 }}
         DATASET_URL_50: ${{ github.event.client_payload.dataseturl_50 }}
         DATASET_URL_100: ${{ github.event.client_payload.dataseturl_100 }}
@@ -60,10 +78,15 @@ jobs:
         }
 
         fetch() {
-          wget --no-verbose --tries=3 --timeout=30 -O "$2" "$1"
+          wget --no-verbose --tries=3 --timeout=60 -O "$2" "$1"
           if [ ! -s "$2" ]; then
             echo "::error::El dataset descargado en $2 esta vacio."
             exit 1
+          fi
+          # Cloudinary puede servir .csv.gz; se descomprime si hace falta.
+          if head -c 2 "$2" | od -An -tx1 | grep -q '1f 8b'; then
+            echo "  ($2 viene comprimido, descomprimiendo)"
+            mv "$2" "$2.gz" && gunzip -f "$2.gz"
           fi
         }
 
@@ -72,41 +95,55 @@ jobs:
           [ -n "$u" ] && n_urls=$((n_urls + 1))
         done
 
-        if [ "$n_urls" -gt 0 ]; then
-          # Caso 1: se reciben las tres versiones ya preparadas (p. ej. Firebase).
-          if [ "$n_urls" -ne 3 ]; then
+        if [ -n "$DATASET_URL" ]; then
+          # Caso 1: dataset de origen completo (categorias en texto). Se
+          # regeneran las tablas de consulta y los tres subconjuntos.
+          echo "Fuente: client_payload.dataseturl (se regeneran catalogos y subconjuntos)"
+          require_https "$DATASET_URL" "dataseturl"
+          fetch "$DATASET_URL" data/INM_estatal_dic25.csv
+          python scripts/make_datasets.py --source data/INM_estatal_dic25.csv
+        else
+          # Caso 2: tres versiones ya codificadas. Del payload si viene; si no,
+          # las URLs de Cloudinary definidas en env.
+          if [ "$n_urls" -gt 0 ] && [ "$n_urls" -ne 3 ]; then
             echo "::error::Se recibieron $n_urls de 3 URLs. Indica dataseturl_25, dataseturl_50 y dataseturl_100, o usa solo dataseturl."
             exit 1
           fi
-          echo "Fuente: client_payload.dataseturl_25 / _50 / _100"
-          require_https "$DATASET_URL_25"  "dataseturl_25"
-          require_https "$DATASET_URL_50"  "dataseturl_50"
-          require_https "$DATASET_URL_100" "dataseturl_100"
-          fetch "$DATASET_URL_25"  data/versions/heart-disease_25.csv
-          fetch "$DATASET_URL_50"  data/versions/heart-disease_50.csv
-          fetch "$DATASET_URL_100" data/versions/heart-disease_100.csv
-          cp data/versions/heart-disease_100.csv data/heart-disease.csv
-        elif [ -n "$DATASET_URL" ]; then
-          # Caso 2: se recibe un unico dataset completo; los subconjuntos se
-          # derivan aqui con muestreo estratificado.
-          echo "Fuente: client_payload.dataseturl (los subconjuntos se derivan en CI)"
-          require_https "$DATASET_URL" "dataseturl"
-          fetch "$DATASET_URL" data/heart-disease.csv
-          python scripts/make_datasets.py
-        else
-          # Caso 3: push o PR sin payload; se usa el dataset del repositorio.
-          echo "Sin client_payload: se usa data/heart-disease.csv del repositorio."
-          python scripts/make_datasets.py
+          if [ "$n_urls" -eq 3 ]; then
+            echo "Fuente: client_payload.dataseturl_25 / _50 / _100"
+            U25="$DATASET_URL_25"; U50="$DATASET_URL_50"; U100="$DATASET_URL_100"
+          else
+            echo "Fuente: URLs de Cloudinary por defecto (env del workflow)"
+            U25="$CLOUDINARY_25"; U50="$CLOUDINARY_50"; U100="$CLOUDINARY_100"
+          fi
+          require_https "$U25"  "dataseturl_25"
+          require_https "$U50"  "dataseturl_50"
+          require_https "$U100" "dataseturl_100"
+          fetch "$U25"  data/versions/incidencia_25.csv
+          fetch "$U50"  data/versions/incidencia_50.csv
+          fetch "$U100" data/versions/incidencia_100.csv
         fi
 
     - name: validar datasets
       run: |
         set -euo pipefail
+        # Las tablas de consulta decodifican la columna id_delito y viven en el
+        # repositorio; sin ellas el entrenamiento no puede reconstruir las
+        # categorias.
+        for f in data/catalogo_delitos.csv data/catalogo_entidades.csv; do
+          [ -f "$f" ] || { echo "::error::Falta la tabla de consulta $f"; exit 1; }
+          echo "$f -> $(( $(wc -l < "$f") - 1 )) filas"
+        done
+
         for v in 25 50 100; do
-          f="data/versions/heart-disease_${v}.csv"
+          f="data/versions/incidencia_${v}.csv"
           [ -f "$f" ] || { echo "::error::Falta $f"; exit 1; }
-          head -n 1 "$f" | grep -q 'target' || {
-            echo "::error::$f no contiene la columna 'target'."; exit 1; }
+          header=$(head -n 1 "$f")
+          for col in id_delito incidencia_delictiva anio mes clave_ent; do
+            echo "$header" | grep -q "$col" || {
+              echo "::error::$f no contiene la columna '$col'. Encabezado: $header"
+              exit 1; }
+          done
           echo "$f -> $(( $(wc -l < "$f") - 1 )) registros"
         done
 
@@ -123,9 +160,12 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: trained-model
+        # catalog.json es obligatorio: la API lo carga al arrancar para validar
+        # las entradas y poblar las listas del frontend.
         path: |
-          model/heart-disease-*.joblib
+          model/incidencia-*.joblib
           model/metrics-*.json
+          model/catalog.json
         retention-days: 7
 
   # ---------------------------------------------------------------------------
@@ -150,12 +190,13 @@ jobs:
       id: meta
       env:
         PAYLOAD_SHA: ${{ github.event.client_payload.sha }}
+        INPUT_TAG: ${{ github.event.inputs.tag }}
         FALLBACK_SHA: ${{ github.sha }}
       run: |
-        TAG="${PAYLOAD_SHA:-$FALLBACK_SHA}"
+        TAG="${PAYLOAD_SHA:-${INPUT_TAG:-$FALLBACK_SHA}}"
         # Etiquetas Docker validas: [A-Za-z0-9_.-], max 128 caracteres.
         if ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'; then
-          echo "::error::client_payload.sha no es una etiqueta Docker valida."
+          echo "::error::La etiqueta de imagen no es valida: use letras, numeros, punto, guion y guion bajo."
           exit 1
         fi
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -181,7 +222,11 @@ jobs:
         DOCKER_USER: ${{ secrets.DOCKER_USER }}
         MODEL_NAME: ${{ secrets.MODEL_NAME }}
         TAG: ${{ steps.meta.outputs.tag }}
-      run: docker build -t "$DOCKER_USER/$MODEL_NAME:$TAG" .
+      # Cada reentrenamiento produce una imagen nueva con su propia etiqueta.
+      # 'latest' se mueve a esa misma imagen para que Render pueda seguirla.
+      run: |
+        docker build -t "$DOCKER_USER/$MODEL_NAME:$TAG" \
+                     -t "$DOCKER_USER/$MODEL_NAME:latest" .
 
     - name: show images
       run: docker images
@@ -193,8 +238,8 @@ jobs:
         TAG: ${{ steps.meta.outputs.tag }}
       run: |
         set -euo pipefail
-        docker run -d --name heart-smoke -p 8000:80 "$DOCKER_USER/$MODEL_NAME:$TAG"
-        trap 'docker rm -f heart-smoke > /dev/null 2>&1 || true' EXIT
+        docker run -d --name incidencia-smoke -p 8000:80 "$DOCKER_USER/$MODEL_NAME:$TAG"
+        trap 'docker rm -f incidencia-smoke > /dev/null 2>&1 || true' EXIT
 
         for i in $(seq 1 30); do
           if curl -fsS http://localhost:8000/health > /dev/null; then break; fi
@@ -207,22 +252,26 @@ jobs:
         curl -fsS http://localhost:8000/models
         echo
 
-        PAYLOAD='{"age":64,"sex":1,"cp":3,"trestbps":120,"chol":267,"fbs":0,"restecg":0,"thalach":99,"exang":1,"oldpeak":1.8,"slope":1,"ca":2,"thal":2}'
-        scores=""
+        echo "== catalogo =="
+        curl -fsS http://localhost:8000/catalog | head -c 300
+        echo
+
+        PAYLOAD='{"anio":2025,"mes":6,"clave_ent":9,"bien_juridico_afectado":"El patrimonio","tipo_delito":"Robo","subtipo_delito":"Robo de vehículo automotor","modalidad":"Robo de coche de 4 ruedas Con violencia"}'
+        preds=""
         for v in 25 50 100; do
-          body=$(curl -fsS -X POST "http://localhost:8000/score?version=$v" \
+          body=$(curl -fsS -X POST "http://localhost:8000/predict?version=$v" \
             -H 'Content-Type: application/json' -d "$PAYLOAD")
           echo "version $v -> $body"
           echo "$body" | grep -q "\"version\":\"$v\"" || {
             echo "::error::La version $v respondio con otra etiqueta de modelo."; exit 1; }
-          scores="$scores$(echo "$body" | sed -E 's/.*"score":([0-9.eE+-]+).*/\1/')\n"
+          preds="$preds$(echo "$body" | sed -E 's/.*"prediccion":([0-9.eE+-]+).*/\1/')\n"
         done
 
         # Tres modelos entrenados con volumenes distintos no deberian coincidir
         # exactamente: si lo hacen, es que se publico el mismo artefacto 3 veces.
-        distinct=$(printf "$scores" | sort -u | wc -l)
+        distinct=$(printf "$preds" | sort -u | wc -l)
         if [ "$distinct" -lt 2 ]; then
-          echo "::error::Las 3 versiones devuelven el mismo score: probablemente se sobrescribieron los artefactos."
+          echo "::error::Las 3 versiones devuelven la misma prediccion: probablemente se sobrescribieron los artefactos."
           exit 1
         fi
         echo "OK: $distinct salidas distintas para el mismo payload."
@@ -239,11 +288,24 @@ jobs:
         DOCKER_USER: ${{ secrets.DOCKER_USER }}
         MODEL_NAME: ${{ secrets.MODEL_NAME }}
         TAG: ${{ steps.meta.outputs.tag }}
-      run: docker push "$DOCKER_USER/$MODEL_NAME:$TAG"
+      run: |
+        docker push "$DOCKER_USER/$MODEL_NAME:$TAG"
+        docker push "$DOCKER_USER/$MODEL_NAME:latest"
 
     - name: docker logout
       if: always()
       run: docker logout
+
+    # Opcional: si existe el secreto RENDER_DEPLOY_HOOK, se avisa a Render para
+    # que vuelva a desplegar y sirva la imagen recien publicada.
+    - name: desplegar en Render
+      if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
+      env:
+        HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+      run: |
+        code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$HOOK")
+        echo "Render deploy hook -> HTTP $code"
+        [ "$code" -lt 400 ] || { echo "::error::Render rechazo el deploy hook."; exit 1; }
 
     - name: resumen
       env:
@@ -255,5 +317,6 @@ jobs:
           echo ""
           echo "- Evento: \`${{ github.event_name }}\`"
           echo "- Repositorio de imagen: \`<DOCKER_USER>/$MODEL_NAME\`"
-          echo "- Etiqueta: \`$TAG\`"
+          echo "- Etiqueta: \`$TAG\` (tambien \`latest\`)"
+          echo "- Modelo: incidencia delictiva estatal, versiones 25 % / 50 % / 100 %"
         } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,646 @@
+{
+  "info": {
+    "name": "incidencia-model",
+    "description": "Coleccion de pruebas de la API de incidencia delictiva estatal.\n\nOrden recomendado: ejecutar la coleccion entera con el Collection Runner. Las peticiones 5.x guardan su prediccion en variables de coleccion y la 6 comprueba que las tres versiones no devuelven lo mismo (lo que delataria artefactos duplicados).\n\nLas peticiones 11 y 12 necesitan que la variable retrain_token tenga el valor de RETRAIN_TOKEN del backend. La 11 lanza un reentrenamiento real y publica una imagen de Docker nueva.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. GET /health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{api_url}}/health",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "Comprueba que la API responde y que los tres modelos estan cargados."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const b = pm.response.json();",
+              "pm.test(\"el modelo esta cargado\", () => pm.expect(b.model_loaded).to.be.true);",
+              "pm.test(\"sirve las tres versiones\", () => pm.expect(b.model_versions).to.include.members([\"25\",\"50\",\"100\"]));",
+              "pm.test(\"la etiqueta es incidencia_delictiva\", () => pm.expect(b.label).to.eql(\"incidencia_delictiva\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. GET /models",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{api_url}}/models",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "models"
+          ]
+        },
+        "description": "Las tres versiones con sus metricas de regresion."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const b = pm.response.json();",
+              "pm.test(\"hay tres versiones\", () => pm.expect(b).to.have.lengthOf(3));",
+              "pm.test(\"solo una es la por defecto\", () => pm.expect(b.filter(m => m.is_default)).to.have.lengthOf(1));",
+              "pm.test(\"cada version bate a la media del dataset\", () => {",
+              "  b.forEach(m => pm.expect(m.mae, `version ${m.version}`).to.be.below(m.baseline_mae));",
+              "});",
+              "pm.test(\"cada version carga un artefacto distinto\", () => {",
+              "  pm.expect(new Set(b.map(m => m.path)).size).to.eql(b.length);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. GET /catalog",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{api_url}}/catalog",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "catalog"
+          ]
+        },
+        "description": "Valores validos de cada campo y jerarquia del delito."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const b = pm.response.json();",
+              "pm.test(\"estan los 32 estados\", () => pm.expect(b.entidades).to.have.lengthOf(32));",
+              "pm.test(\"estan los 12 meses\", () => pm.expect(b.meses).to.have.lengthOf(12));",
+              "pm.test(\"la jerarquia no esta vacia\", () => pm.expect(Object.keys(b.jerarquia).length).to.be.above(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. POST /predict (version por defecto)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/predict",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "predict"
+          ]
+        },
+        "description": "Sin ?version= responde la version por defecto del despliegue.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"anio\": 2025,\n  \"mes\": 6,\n  \"clave_ent\": 9,\n  \"bien_juridico_afectado\": \"El patrimonio\",\n  \"tipo_delito\": \"Robo\",\n  \"subtipo_delito\": \"Robo de vehículo automotor\",\n  \"modalidad\": \"Robo de coche de 4 ruedas Con violencia\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const b = pm.response.json();",
+              "pm.test(\"devuelve un conteo no negativo\", () => pm.expect(b.prediccion).to.be.at.least(0));",
+              "pm.test(\"el redondeo es coherente\", () => pm.expect(b.prediccion_redondeada).to.eql(Math.round(b.prediccion)));",
+              "pm.test(\"resuelve la entidad\", () => pm.expect(b.entidad).to.eql(\"Ciudad de México\"));",
+              "pm.test(\"resuelve el periodo\", () => pm.expect(b.periodo).to.eql(\"Junio 2025\"));",
+              "pm.collectionVariables.set(\"pred_default\", b.prediccion);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.25 POST /predict?version=25",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/predict?version=25",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "predict"
+          ],
+          "query": [
+            {
+              "key": "version",
+              "value": "25"
+            }
+          ]
+        },
+        "description": "Mismo payload contra la version entrenada con el 25 % del dataset.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"anio\": 2025,\n  \"mes\": 6,\n  \"clave_ent\": 9,\n  \"bien_juridico_afectado\": \"El patrimonio\",\n  \"tipo_delito\": \"Robo\",\n  \"subtipo_delito\": \"Robo de vehículo automotor\",\n  \"modalidad\": \"Robo de coche de 4 ruedas Con violencia\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const b = pm.response.json();",
+              "pm.test(\"responde la version 25\", () => pm.expect(b.version).to.eql(\"25\"));",
+              "pm.test(\"devuelve un conteo no negativo\", () => pm.expect(b.prediccion).to.be.at.least(0));",
+              "pm.collectionVariables.set(\"pred_25\", b.prediccion);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.50 POST /predict?version=50",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/predict?version=50",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "predict"
+          ],
+          "query": [
+            {
+              "key": "version",
+              "value": "50"
+            }
+          ]
+        },
+        "description": "Mismo payload contra la version entrenada con el 50 % del dataset.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"anio\": 2025,\n  \"mes\": 6,\n  \"clave_ent\": 9,\n  \"bien_juridico_afectado\": \"El patrimonio\",\n  \"tipo_delito\": \"Robo\",\n  \"subtipo_delito\": \"Robo de vehículo automotor\",\n  \"modalidad\": \"Robo de coche de 4 ruedas Con violencia\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const b = pm.response.json();",
+              "pm.test(\"responde la version 50\", () => pm.expect(b.version).to.eql(\"50\"));",
+              "pm.test(\"devuelve un conteo no negativo\", () => pm.expect(b.prediccion).to.be.at.least(0));",
+              "pm.collectionVariables.set(\"pred_50\", b.prediccion);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5.100 POST /predict?version=100",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/predict?version=100",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "predict"
+          ],
+          "query": [
+            {
+              "key": "version",
+              "value": "100"
+            }
+          ]
+        },
+        "description": "Mismo payload contra la version entrenada con el 100 % del dataset.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"anio\": 2025,\n  \"mes\": 6,\n  \"clave_ent\": 9,\n  \"bien_juridico_afectado\": \"El patrimonio\",\n  \"tipo_delito\": \"Robo\",\n  \"subtipo_delito\": \"Robo de vehículo automotor\",\n  \"modalidad\": \"Robo de coche de 4 ruedas Con violencia\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const b = pm.response.json();",
+              "pm.test(\"responde la version 100\", () => pm.expect(b.version).to.eql(\"100\"));",
+              "pm.test(\"devuelve un conteo no negativo\", () => pm.expect(b.prediccion).to.be.at.least(0));",
+              "pm.collectionVariables.set(\"pred_100\", b.prediccion);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Las tres versiones son modelos distintos",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{api_url}}/health",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "No hace una peticion nueva: compara lo que guardaron las anteriores."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const vals = [\"pred_25\",\"pred_50\",\"pred_100\"].map(k => pm.collectionVariables.get(k));",
+              "pm.test(\"se consultaron las tres versiones primero\", () => {",
+              "  pm.expect(vals.every(v => v !== undefined && v !== null)).to.be.true;",
+              "});",
+              "pm.test(\"no todas devuelven lo mismo (artefactos no duplicados)\", () => {",
+              "  pm.expect(new Set(vals.map(String)).size).to.be.above(1);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. POST /predict con version inexistente (404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/predict?version=77",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "predict"
+          ],
+          "query": [
+            {
+              "key": "version",
+              "value": "77"
+            }
+          ]
+        },
+        "description": "Una version que el despliegue no sirve debe dar 404, no un fallo silencioso.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"anio\": 2025,\n  \"mes\": 6,\n  \"clave_ent\": 9,\n  \"bien_juridico_afectado\": \"El patrimonio\",\n  \"tipo_delito\": \"Robo\",\n  \"subtipo_delito\": \"Robo de vehículo automotor\",\n  \"modalidad\": \"Robo de coche de 4 ruedas Con violencia\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));",
+              "pm.test(\"el mensaje nombra la version pedida\", () => pm.expect(pm.response.json().detail).to.include(\"77\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. POST /predict con modalidad inexistente (422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/predict",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "predict"
+          ]
+        },
+        "description": "La modalidad debe pertenecer al subtipo elegido.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"anio\": 2025,\n  \"mes\": 6,\n  \"clave_ent\": 9,\n  \"bien_juridico_afectado\": \"El patrimonio\",\n  \"tipo_delito\": \"Robo\",\n  \"subtipo_delito\": \"Robo de vehículo automotor\",\n  \"modalidad\": \"no existe\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"422 Unprocessable Entity\", () => pm.response.to.have.status(422));",
+              "pm.test(\"el mensaje nombra el campo\", () => pm.expect(pm.response.json().detail).to.include(\"modalidad\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. POST /predict con mes fuera de rango (422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/predict",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "predict"
+          ]
+        },
+        "description": "Validacion de pydantic: mes entre 1 y 12.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"anio\": 2025,\n  \"mes\": 13,\n  \"clave_ent\": 9,\n  \"bien_juridico_afectado\": \"El patrimonio\",\n  \"tipo_delito\": \"Robo\",\n  \"subtipo_delito\": \"Robo de vehículo automotor\",\n  \"modalidad\": \"Robo de coche de 4 ruedas Con violencia\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"422 Unprocessable Entity\", () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. POST /retrain sin token (401 o 503)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/retrain",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "retrain"
+          ]
+        },
+        "description": "El reentrenamiento nunca debe quedar abierto a cualquiera.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"no esta abierto: 401 (token mal) o 503 (sin configurar)\", () => {",
+              "  pm.expect(pm.response.code).to.be.oneOf([401, 503]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. POST /retrain (lanza el reentrenamiento)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Retrain-Token",
+            "value": "{{retrain_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/retrain",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "retrain"
+          ]
+        },
+        "description": "Dispara el workflow de GitHub Actions, que entrena las tres versiones y publica una imagen de Docker nueva. Requiere que retrain_token tenga el valor de RETRAIN_TOKEN del backend.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"dataseturl_25\": \"{{dataset_url_25}}\",\n  \"dataseturl_50\": \"{{dataset_url_50}}\",\n  \"dataseturl_100\": \"{{dataset_url_100}}\",\n  \"nota\": \"Lanzado desde Postman\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 503) {",
+              "  pm.test(\"reentrenamiento no configurado en este backend: se omite\", () => {",
+              "    pm.expect(pm.response.json().detail).to.include(\"RETRAIN_TOKEN\");",
+              "  });",
+              "} else {",
+              "  pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "  const b = pm.response.json();",
+              "  pm.test(\"quedo lanzado\", () => pm.expect(b.dispatched).to.be.true);",
+              "  pm.test(\"trae la etiqueta de la imagen nueva\", () => pm.expect(b.tag).to.be.a(\"string\").and.not.empty);",
+              "  pm.collectionVariables.set(\"last_tag\", b.tag);",
+              "  console.log(\"Imagen nueva etiquetada:\", b.tag, \"->\", b.actions_url);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. GET /retrain/status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Retrain-Token",
+            "value": "{{retrain_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{api_url}}/retrain/status",
+          "host": [
+            "{{api_url}}"
+          ],
+          "path": [
+            "retrain",
+            "status"
+          ]
+        },
+        "description": "Ultimas corridas del workflow de reentrenamiento."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 503) {",
+              "  pm.test(\"reentrenamiento no configurado en este backend: se omite\", () => {",
+              "    pm.expect(pm.response.json().detail).to.include(\"RETRAIN_TOKEN\");",
+              "  });",
+              "} else {",
+              "  pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "  pm.test(\"devuelve la lista de corridas\", () => pm.expect(pm.response.json().runs).to.be.an(\"array\"));",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "pred_25",
+      "value": ""
+    },
+    {
+      "key": "pred_50",
+      "value": ""
+    },
+    {
+      "key": "pred_100",
+      "value": ""
+    },
+    {
+      "key": "pred_default",
+      "value": ""
+    },
+    {
+      "key": "last_tag",
+      "value": ""
+    }
+  ]
+}

@@ -1,286 +1,303 @@
-# heart-model — Reentrenamiento de un modelo de ML con GitHub Actions
+# incidencia-model — Reentrenamiento de un modelo de ML con GitHub Actions
 
-Práctica de MLOps: un clasificador de enfermedad cardíaca servido con FastAPI,
-reentrenado desde GitHub Actions mediante `repository_dispatch`, empaquetado en
-Docker, publicado en Docker Hub y consumido desde un frontend React.
+Modelo de **incidencia delictiva estatal** servido con FastAPI, empaquetado en
+Docker y reentrenable desde la propia interfaz: cada reentrenamiento publica una
+imagen de Docker nueva.
 
-```
-data/heart-disease.csv ──► model/train.py ──► model/heart-disease-v1.joblib
-                                                      │
-                                      Dockerfile ─────┤
-                                                      ▼
-                        Docker Hub  ──►  Render (API)  ◄──  frontend/ (React)
-```
+El modelo estima `incidencia_delictiva`, el número de carpetas de investigación
+abiertas en un estado, un mes y una modalidad de delito, a partir de los datos
+abiertos del SESNSP (2015–2025, 413 952 registros).
+
+Se entrenan y despliegan **tres versiones** del mismo modelo, con el 25 %, 50 %
+y 100 % del dataset, para poder comparar el efecto del volumen de datos:
+
+| Versión | Registros | MAE | RMSE | R² | MAE de referencia |
+|--------:|----------:|----:|-----:|---:|------------------:|
+|  25 %   |   103 488 | 12.53 | 48.91 | 0.9354 | 74.50 |
+|  50 %   |   206 976 | 11.89 | 54.30 | 0.9351 | 76.80 |
+| 100 %   |   413 952 | 10.61 | 39.36 | 0.9582 | 74.84 |
+
+MAE y RMSE están en carpetas de investigación, así que son directamente
+comparables entre versiones. El «MAE de referencia» es el que se obtendría
+prediciendo siempre la media del dataset: el modelo del 100 % lo mejora en un
+86 %.
 
 ## Estructura
 
-| Ruta | Contenido |
-|---|---|
-| `app.py` | API FastAPI: `GET /`, `GET /health`, `POST /score` |
-| `model/train.py` | Entrenamiento de **una** versión del `RandomForestClassifier` |
-| `scripts/train_all_versions.py` | Entrena las tres versiones (25/50/100) |
-| `model/heart-disease-{25,50,100}.joblib` | Un artefacto por versión |
-| `model/metrics-{25,50,100}.json` | Métricas de cada versión |
-| `model/heart-disease-v1.joblib` | Copia de la versión por defecto (compatibilidad) |
-| `data/heart-disease.csv` | Dataset base (1025 registros, 13 variables + `target`) |
-| `scripts/make_datasets.py` | Genera las versiones al 25 %, 50 % y 100 % |
-| `scripts/test_model_curl.sh` | Pruebas del modelo desplegado con cURL |
-| `tests/test_app.py` | Pruebas del backend (pytest) |
-| `postman/` | Colección y entorno de Postman |
-| `specs/heart-model.openapi.json` | Especificación OpenAPI exportada |
-| `frontend/` | Frontend React + Vite |
-| `.github/workflows/ml_ci_cd.yml` | Pipeline CI/CD |
-| `render.yaml` | Blueprint de despliegue en Render |
+```
+app.py                       API de FastAPI (inferencia + reentrenamiento)
+client.py                    cliente de ejemplo de POST /predict
+Dockerfile                   imagen de la API
+render.yaml                  blueprint de Render (backend + frontend)
+model/
+  schema.py                  esquema compartido por entrenamiento e inferencia
+  train.py                   entrenamiento de una versión
+  incidencia-{25,50,100}.joblib    los tres modelos
+  metrics-{25,50,100}.json         métricas de cada versión
+  catalog.json               valores válidos de cada campo (lo sirve GET /catalog)
+data/
+  catalogo_delitos.csv       98 filas: id_delito -> jerarquía del delito
+  catalogo_entidades.csv     32 filas: clave_ent -> nombre del estado
+  versions/                  datasets generados (no se versionan en git)
+scripts/
+  make_datasets.py           genera catálogos y las versiones 25/50/100
+  train_all_versions.py      entrena las tres versiones de una pasada
+  test_model_curl.sh         prueba la API desplegada con cURL
+frontend/                    interfaz React + Vite
+postman/                     colección y entorno de Postman
+specs/                       especificación OpenAPI
+tests/                       pruebas de la API y del registro de modelos
+```
+
+## El dataset y por qué está codificado
+
+El CSV original del SESNSP pesa 47 MB con las categorías en texto, y Cloudinary
+—donde se alojan los datasets para que el CI los descargue— limita los archivos
+a 10 MB.
+
+En lugar de recortar registros, los CSV se escriben con identificadores:
+
+```
+anio,mes,clave_ent,id_delito,incidencia_delictiva
+2015,4,1,0,22
+```
+
+`id_delito` indexa las 98 combinaciones de la jerarquía del delito
+(`bien_juridico_afectado` → `tipo_delito` → `subtipo_delito` → `modalidad`) y
+`clave_ent` indexa los 32 estados. Las dos tablas de consulta viven en el
+repositorio y pesan 9 KB entre las dos.
+
+Así el dataset **completo** baja de 47 MB a 6.35 MB y las tres versiones entran
+en el límite sin perder un solo registro:
+
+| Versión | Registros | CSV |
+|--------:|----------:|----:|
+| 100 %   |   413 952 | 6.35 MB |
+|  50 %   |   206 976 | 3.18 MB |
+|  25 %   |   103 488 | 1.59 MB |
+
+`model/train.py` reconstruye las categorías en texto antes de entrenar, y la API
+publica el catálogo completo en `GET /catalog` para que el frontend arme sus
+listas desplegables.
 
 ## Contrato de la API
 
-El backend carga **las tres versiones del modelo** a la vez y las sirve desde el
-mismo despliegue.
+### `GET /health`
+
+Estado del servicio, versiones cargadas y si el reentrenamiento está habilitado.
 
 ### `GET /models`
 
-```json
-[
-  {"version":"25","path":"model/heart-disease-25.joblib","is_default":false,
-   "n_rows":256,"accuracy":0.8846,"roc_auc":0.9289,"dataset":"data/versions/heart-disease_25.csv"},
-  {"version":"50", "...": "..."},
-  {"version":"100","is_default":true, "...": "..."}
-]
-```
+Las tres versiones con sus métricas (`mae`, `rmse`, `r2`, `baseline_mae`,
+`n_rows`) y la ruta de su artefacto.
 
-### `POST /score` y `POST /score?version=25|50|100`
+### `GET /catalog`
 
-```json
-{"age":64,"sex":1,"cp":3,"trestbps":120,"chol":267,"fbs":0,"restecg":0,
- "thalach":99,"exang":1,"oldpeak":1.8,"slope":1,"ca":2,"thal":2}
-```
+Valores válidos de cada campo: los 32 estados, los 12 meses, el rango de años y
+la jerarquía del delito anidada. El frontend lo usa para encadenar las listas
+desplegables, de modo que no se pueda enviar una combinación inexistente.
 
-Respuesta:
+### `POST /predict` y `POST /predict?version=25|50|100`
+
+Entrada — los siete campos del modelo. `entidad` (nombre) y `clave_ent` (1–32)
+son intercambiables; si se envían los dos, gana el nombre:
 
 ```json
-{"score": 0.3423109827696645, "version": "100"}
+{
+  "anio": 2025,
+  "mes": 6,
+  "clave_ent": 9,
+  "bien_juridico_afectado": "El patrimonio",
+  "tipo_delito": "Robo",
+  "subtipo_delito": "Robo de vehículo automotor",
+  "modalidad": "Robo de coche de 4 ruedas Con violencia"
+}
 ```
 
-Sin el parámetro `version` se usa la versión por defecto
-(`DEFAULT_MODEL_VERSION`, `100` si no se define). Una versión no cargada
-devuelve `404`; valores fuera de los rangos declarados, `422`.
+Salida:
 
-El mismo paciente contra las tres versiones:
+```json
+{
+  "prediccion": 43.96539358178889,
+  "prediccion_redondeada": 44,
+  "version": "100",
+  "label": "incidencia_delictiva",
+  "entidad": "Ciudad de México",
+  "periodo": "Junio 2025"
+}
+```
 
-| Versión | Registros de entrenamiento | `score` |
-|---|---|---|
-| 25 % | 256 | 0.2990207072002889 |
-| 50 % | 512 | 0.4450901281006757 |
-| 100 % | 1025 | 0.3423109827696645 |
+Sin `?version=` responde la versión por defecto (`DEFAULT_MODEL_VERSION`, 100 %).
+Una versión que el despliegue no sirve devuelve **404**; una categoría
+inexistente o una combinación de delito imposible devuelve **422** indicando el
+campo.
 
-`score` es `predict_proba` de la clase 1 (presencia de enfermedad): la proporción
-de árboles del bosque que votan por esa clase. **No es un riesgo clínico
-calibrado ni un porcentaje de riesgo.** Las diferencias entre versiones provienen
-solo del volumen de datos de entrenamiento.
+### `POST /retrain` y `GET /retrain/status`
 
-`GET /health` devuelve `{"status","model_loaded","model_path","model_versions",
-"default_version","features"}`. Documentación interactiva en `/docs`.
+Lanzan y consultan el reentrenamiento. Ver la sección siguiente.
+
+## Reentrenamiento: una imagen de Docker por reentrenamiento
+
+El entrenamiento **no ocurre dentro del contenedor de la API**. `POST /retrain`
+dispara el workflow de GitHub Actions (`repository_dispatch`), que:
+
+1. descarga los tres datasets de Cloudinary,
+2. entrena las versiones 25 %, 50 % y 100 %,
+3. corre las pruebas,
+4. construye la imagen y la publica en Docker Hub **con su propia etiqueta**,
+   moviendo además `latest` a esa misma imagen.
+
+De ahí que cada reentrenamiento produzca una imagen nueva e inmutable. La API
+sigue sirviendo el modelo anterior hasta que se redespliegue con la imagen nueva
+(automático si se define el secreto `RENDER_DEPLOY_HOOK`).
+
+### Configuración
+
+El endpoint está **cerrado por defecto**: sin `RETRAIN_TOKEN` responde 503. Si
+estuviera abierto, cualquiera podría lanzar construcciones de imágenes. Para
+habilitarlo, define en el servicio del backend:
+
+| Variable | Qué es |
+|---|---|
+| `RETRAIN_TOKEN` | El token que el cliente envía en la cabecera `X-Retrain-Token`. Inventa uno largo. |
+| `GITHUB_TOKEN` | PAT de GitHub con permiso de escritura en *contents* del repositorio. |
+| `GITHUB_REPOSITORY` | El repositorio, en formato `usuario/repo`. |
+| `RETRAIN_ALLOWED_HOSTS` | Hosts permitidos para las URL de dataset. Por defecto `res.cloudinary.com`. |
+
+### Desde la interfaz
+
+El panel «Reentrenar el modelo» pide el token, permite cambiar las URL de los
+datasets y la etiqueta de la imagen, y enlaza la corrida en GitHub Actions. El
+token se guarda solo en `sessionStorage`, nunca en una variable `VITE_*` (esas
+quedan incrustadas en el JavaScript público).
+
+### Desde la línea de comandos
+
+```bash
+curl -X POST https://<tu-api>.onrender.com/retrain \
+  -H 'X-Retrain-Token: <RETRAIN_TOKEN>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "dataseturl_25":  "https://res.cloudinary.com/.../incidencia_25_....csv",
+    "dataseturl_50":  "https://res.cloudinary.com/.../incidencia_50_....csv",
+    "dataseturl_100": "https://res.cloudinary.com/.../incidencia_100_....csv",
+    "nota": "datos de enero"
+  }'
+```
+
+También se puede disparar el workflow directamente:
+
+```bash
+curl -X POST https://api.github.com/repos/<usuario>/<repo>/dispatches \
+  -H 'Accept: application/vnd.github+json' \
+  -H 'Authorization: Bearer <PAT>' \
+  -d '{"event_type":"ml_ci_cd","client_payload":{"sha":"mi-etiqueta"}}'
+```
 
 ## Ejecución local
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
 
-python scripts/make_datasets.py       # genera data/versions/*.csv
-python scripts/train_all_versions.py  # entrena las 3 versiones del modelo
-pytest tests/ -q                      # pruebas del backend
-uvicorn app:app --reload --port 8000 # API en http://localhost:8000/docs
-```
+# 1. Generar catálogos y las tres versiones del dataset
+#    (requiere data/INM_estatal_dic25.csv, el CSV original del SESNSP)
+python scripts/make_datasets.py
 
-Con Docker:
+# 2. Entrenar las tres versiones
+python scripts/train_all_versions.py
 
-```bash
-docker build -t heart-model:local .
-docker run --rm -p 8000:80 heart-model:local
-./scripts/test_model_curl.sh http://localhost:8000
+# 3. Servir la API
+uvicorn app:app --reload --port 8000
+
+# 4. Probar
+python client.py
+./scripts/test_model_curl.sh
+python -m pytest tests/ -q
 ```
 
 Frontend:
 
 ```bash
 cd frontend
-cp .env.example .env     # ajustar VITE_API_URL
 npm install
-npm run dev              # http://localhost:5173
-npm run build            # genera frontend/dist
+cp .env.example .env     # VITE_API_URL=http://localhost:8000
+npm run dev
 ```
 
-`VITE_API_URL` se incrusta en **tiempo de compilación**: tras cambiarla hay que
-reconstruir.
+Con Docker:
 
-El frontend consulta `GET /models` al cargar y muestra un selector con las
-versiones que el backend realmente sirve, además de un modo «comparar» que envía
-el mismo paciente a las tres y muestra los resultados en una tabla.
+```bash
+docker build -t incidencia-model .
+docker run --rm -p 8000:80 incidencia-model
+```
 
 ## Pipeline de GitHub Actions
 
-`.github/workflows/ml_ci_cd.yml` se dispara con `push` y `pull_request` sobre
-`main`, y con `repository_dispatch` de tipo `ml_ci_cd`. Tiene dos trabajos:
+`.github/workflows/ml_ci_cd.yml` tiene dos trabajos:
 
-1. **`train`** — instala dependencias, prepara los tres datasets, ejecuta
-   `scripts/train_all_versions.py` (que llama a `model/train.py` una vez por
-   versión, escribiendo artefactos con nombres distintos), corre las pruebas y
-   sube los tres modelos como artefacto. No accede a ningún secreto.
-2. **`publish`** — descarga los artefactos, construye **una imagen que contiene
-   las tres versiones**, hace un *smoke test* que pide una predicción a cada una
-   y falla si las tres devuelven el mismo `score` (señal de que los artefactos se
-   sobrescribieron), inicia sesión en Docker Hub y publica.
-   Se omite en `pull_request` (`if: github.event_name != 'pull_request'`), de
-   modo que un PR no confiable nunca obtiene acceso a los secretos.
+- **train** — se ejecuta en `push`, `pull_request` y `repository_dispatch`. No
+  accede a ningún secreto, así que es seguro para PRs externos.
+- **publish** — no se ejecuta en `pull_request`, de modo que un PR no confiable
+  nunca obtiene acceso a los secretos de Docker Hub. Construye la imagen, le
+  hace un *smoke test* (comprueba que las tres versiones responden y que no
+  devuelven todas lo mismo, lo que delataría artefactos duplicados) y la publica.
 
-### De dónde salen los tres datasets
+### De dónde salen los datasets
 
-El paso «preparar datasets» resuelve la fuente en este orden:
-
-| Caso | `client_payload` | Comportamiento |
+| Caso | Qué llega | Qué hace el workflow |
 |---|---|---|
-| 1 | `dataseturl_25`, `dataseturl_50`, `dataseturl_100` | Descarga las tres (deben estar las tres; si faltan, error) |
-| 2 | `dataseturl` | Descarga el dataset completo y **deriva** los subconjuntos con muestreo estratificado |
-| 3 | *(ninguno)* | Usa `data/heart-disease.csv` del repositorio y deriva los subconjuntos |
+| 1 | `client_payload.dataseturl` | Lo trata como el CSV original del SESNSP: regenera las tablas de consulta y las tres versiones. |
+| 2 | `client_payload.dataseturl_25/_50/_100` | Descarga las tres versiones ya codificadas. |
+| 3 | nada (push, PR) | Usa las URL de Cloudinary definidas en el bloque `env` del workflow. |
 
-Solo se aceptan URLs `https`. La URL nunca se imprime en los registros (puede
-llevar un token de Firebase).
-
-Etiqueta de la imagen: `client_payload.sha` si se recibe, y `github.sha` en caso
-contrario. La etiqueta se valida contra el formato permitido por Docker antes de
-usarse. Cada dispatch produce una etiqueta distinta, así que **las imágenes no se
-sobrescriben entre sí**; dentro de cada imagen, los tres modelos viven en
-archivos con nombres distintos y cada `metrics-<version>.json` registra de qué
-dataset salió.
+Las URL deben ser `https`. Si el archivo viene comprimido (`.csv.gz`), el
+workflow lo descomprime solo.
 
 ### Secretos requeridos
 
-En *Settings → Secrets and variables → Actions*:
-
-| Secreto | Valor |
+| Secreto | Para qué |
 |---|---|
-| `DOCKER_USER` | Usuario de Docker Hub |
-| `DOCKER_PASSWORD` | Token de acceso de Docker Hub |
-| `MODEL_NAME` | Nombre del repositorio de la imagen, p. ej. `heart-model` |
-
-El login usa `--password-stdin`, por lo que la credencial no aparece en la línea
-de comandos ni en los registros.
-
-### Disparar el workflow
-
-Hace falta un *personal access token* clásico con ámbito `workflow`.
-
-```bash
-curl -X POST https://api.github.com/repos/Alessito54/heart-model/dispatches \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github+json" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "event_type": "ml_ci_cd",
-        "client_payload": {
-          "dataseturl_25":  "https://.../heart-disease_25.csv",
-          "dataseturl_50":  "https://.../heart-disease_50.csv",
-          "dataseturl_100": "https://.../heart-disease_100.csv",
-          "sha": "heart-disease-all"
-        }
-      }'
-```
-
-Respuesta esperada: `204 No Content`.
-
-Desde Postman: importar `postman/heart-model.postman_collection.json` y
-`postman/heart-model.postman_environment.json`, rellenar `github_token`
-(variable de tipo *secret*) y las tres `dataset_url_*`.
-
-## Versiones del dataset (25 % / 50 % / 100 %)
-
-```bash
-python scripts/make_datasets.py
-```
-
-Genera en `data/versions/`:
-
-| Archivo | Registros | Proporción de `target` |
-|---|---|---|
-| `heart-disease_25.csv` | 256 | 0: 48.83 % · 1: 51.17 % |
-| `heart-disease_50.csv` | 512 | 0: 48.63 % · 1: 51.37 % |
-| `heart-disease_100.csv` | 1025 | 0: 48.68 % · 1: 51.32 % |
-
-El muestreo es estratificado sobre `target` (`random_state=42`, reproducible) y
-conserva encabezado, columnas y tipos. `data/versions/` está en `.gitignore`:
-los archivos se regeneran con el script y se suben al almacenamiento externo.
-
-### Subirlos a Firebase Storage
-
-1. Crear un proyecto en <https://console.firebase.google.com> y activar *Storage*.
-2. Subir los tres CSV desde la consola web (*Storage → Upload file*).
-3. En cada archivo, copiar la **URL de descarga** (incluye `?alt=media&token=…`).
-4. Pegar esas URLs en las variables `dataset_url_25/50/100` del entorno de
-   Postman, o pasarlas en `client_payload.dataseturl`.
-
-Si se automatiza la subida, las credenciales del servicio deben ir en variables
-de entorno o GitHub Secrets. **Nunca se comete un archivo de credenciales al
-repositorio.** La URL de descarga de Firebase contiene un token: trátala como
-secreto y no la publiques en capturas o registros.
-
-Cloudinary (alternativa mencionada en la práctica) sirve igual: subir como
-*raw* y usar la URL resultante.
+| `DOCKER_USER` | Usuario de Docker Hub. |
+| `DOCKER_PASSWORD` | Token de acceso de Docker Hub. |
+| `MODEL_NAME` | Nombre del repositorio de imagen. |
+| `RENDER_DEPLOY_HOOK` | Opcional: si existe, Render redespliega al publicar la imagen. |
 
 ## Despliegue en Render
 
-### Modo A (recomendado) — un servicio para las tres versiones
+Un solo servicio de backend sirve las tres versiones; el frontend elige con
+`?version=`.
 
-La imagen publicada contiene los tres modelos, así que basta **un** servicio.
+1. **Backend** — *New → Web Service → Deploy an existing image*, apuntando a
+   `docker.io/<DOCKER_USER>/<MODEL_NAME>:latest`. Variables de entorno: `PORT=10000`,
+   `DEFAULT_MODEL_VERSION=100` y, para habilitar el reentrenamiento,
+   `RETRAIN_TOKEN`, `GITHUB_TOKEN` y `GITHUB_REPOSITORY`. *Health check path*:
+   `/health`.
+2. **Frontend** — *New → Static Site*, `rootDir: frontend`,
+   `buildCommand: npm ci && npm run build`, `staticPublishPath: ./dist`, y
+   `VITE_API_URL` con la URL pública del backend.
 
-**Backend** — *New → Web Service → Deploy an existing image*:
+O bien importar `render.yaml` como *Blueprint*.
 
-- Imagen: `docker.io/<DOCKER_USER>/<MODEL_NAME>:<TAG>`
-- Health check path: `/health`
-- Variable opcional: `DEFAULT_MODEL_VERSION` (`100` por defecto)
+> En el plan gratuito el servicio se duerme tras ~15 min sin tráfico y la primera
+> petición puede tardar hasta un minuto. El frontend lo contempla: reintenta tres
+> veces y espera hasta 75 s.
 
-**Frontend** — *New → Static Site*:
-
-- Root directory: `frontend`
-- Build command: `npm ci && npm run build`
-- Publish directory: `dist`
-- Variable de entorno: `VITE_API_URL` = URL pública del backend
-
-El frontend llama a `GET /models` al cargar y construye el selector con lo que
-el backend diga que sirve. No hay nada más que configurar para las tres
-versiones.
-
-### Modo B — un servicio por versión
-
-Si prefieres un despliegue por etiqueta de imagen (tres dispatches con `sha`
-distintos), crea tres Web Services y define en el frontend:
-
-```
-VITE_API_URL_25=https://heart-model-25.onrender.com
-VITE_API_URL_50=https://heart-model-50.onrender.com
-VITE_API_URL_100=https://heart-model-100.onrender.com
-```
-
-Si alguna de esas tres variables está definida, el frontend enruta cada versión
-a su propio servicio y deja de enviar `?version=`. `VITE_API_URL` se ignora.
-
-El contenedor escucha en `$PORT` (y en el 80 si no se define), que es lo que
-Render inyecta. `render.yaml` contiene el modo A como *blueprint*.
-
-## Pruebas del modelo con cURL
+## Pruebas
 
 ```bash
-./scripts/test_model_curl.sh https://<tu-servicio>.onrender.com
+python -m pytest tests/ -q                 # 41 pruebas de la API
+./scripts/test_model_curl.sh <URL>         # comprobaciones con cURL
+npx newman run postman/incidencia-model.postman_collection.json \
+  --env-var api_url=<URL>                  # 37 aserciones
 ```
-
-Envía el mismo payload de referencia a las tres versiones, imprime las tres
-salidas, comprueba que no son idénticas y verifica los códigos `404` (versión
-inexistente) y `422` (datos inválidos).
 
 ## Limitaciones del modelo
 
-El conjunto UCI Heart Disease es pequeño (303 pacientes originales, ampliados a
-1025 por remuestreo: hay 723 filas duplicadas), antiguo y no representativo de
-la población general. El bosque se entrena con 10 árboles y profundidad máxima
-2, y no está calibrado. Este proyecto es una demostración de un flujo de MLOps,
-no una herramienta de diagnóstico.
+Uso académico y demostrativo. El modelo aprende el histórico de carpetas de
+investigación **registradas**, que no es lo mismo que el delito real: la cifra
+negra y los cambios en la forma de registrar quedan dentro de los datos. El
+43 % de los registros vale 0 y la cola llega a casi 10 000, así que el MAE hay
+que leerlo junto al MAE de referencia. Fuera del rango 2015–2025 el modelo
+extrapola, y una categoría que no estuviera en el entrenamiento se trata como
+valor ausente.
