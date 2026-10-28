@@ -299,10 +299,15 @@ jobs:
     # Opcional: si existe el secreto RENDER_DEPLOY_HOOK, se avisa a Render para
     # que vuelva a desplegar y sirva la imagen recien publicada.
     - name: desplegar en Render
-      if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
       env:
         HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+      # El contexto 'secrets' no esta disponible en el 'if' de un step, asi que
+      # la comprobacion va dentro del script: sin el secreto, se omite.
       run: |
+        if [ -z "$HOOK" ]; then
+          echo "Sin RENDER_DEPLOY_HOOK: se omite el redespliegue automatico."
+          exit 0
+        fi
         code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$HOOK")
         echo "Render deploy hook -> HTTP $code"
         [ "$code" -lt 400 ] || { echo "::error::Render rechazo el deploy hook."; exit 1; }
