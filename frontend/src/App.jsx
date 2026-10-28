@@ -13,6 +13,7 @@ const STATUS_LABEL = {
   waking: 'Despertando el servicio…',
   online: 'API en línea',
   offline: 'API no disponible',
+  outdated: 'API desactualizada',
 }
 
 // Reintentos al cargar: en el plan gratuito de Render el backend puede estar
@@ -40,10 +41,26 @@ export default function App() {
   /** Carga el catálogo y las versiones, reintentando si el servicio está dormido. */
   const refresh = useCallback(async () => {
     const probe = async () => {
-      const [salud, cat, list] = await Promise.all([
-        checkHealth(), getCatalog(), listModels(),
-      ])
+      // /health primero: si responde, el servicio esta despierto y un fallo
+      // posterior ya no es un arranque en frio, sino otra cosa.
+      const salud = await checkHealth()
       setHealth(salud)
+
+      let cat
+      try {
+        cat = await getCatalog()
+      } catch (error) {
+        if (error.status === 404) {
+          // El backend responde pero no conoce /catalog: es una imagen
+          // anterior a este frontend. Reintentar no arregla nada.
+          const desactualizada = new Error('backend sin /catalog')
+          desactualizada.outdated = true
+          throw desactualizada
+        }
+        throw error
+      }
+
+      const list = await listModels()
       setCatalog(cat)
       setValues((prev) => prev ?? defaultValues(cat))
 
@@ -64,7 +81,11 @@ export default function App() {
         await probe()
         setStatus('online')
         return
-      } catch {
+      } catch (error) {
+        if (error.outdated) {
+          setStatus('outdated')
+          return
+        }
         if (attempt < HEALTH_ATTEMPTS) {
           await new Promise((resolve) => setTimeout(resolve, 2000))
         }
@@ -206,6 +227,21 @@ export default function App() {
                 el plan gratuito de Render el servicio se duerme tras unos minutos
                 sin uso: espera un momento y pulsa <em>Reintentar</em>.
               </p>
+            )}
+
+            {status === 'outdated' && (
+              <div className="alert" role="alert">
+                <strong>El backend está en línea, pero sirve una imagen anterior</strong>
+                <p>
+                  Responde a <code>GET /health</code> pero no conoce{' '}
+                  <code>GET /catalog</code>, así que es una versión previa a esta
+                  interfaz{health?.model_path && <> (está sirviendo{' '}
+                  <code>{health.model_path}</code>)</>}. Redespliega el servicio
+                  con la imagen más reciente: en Render, <em>Settings → Image</em>,
+                  comprueba que la <em>Image URL</em> termine en{' '}
+                  <code>:latest</code> y vuelve a desplegar.
+                </p>
+              </div>
             )}
 
             {models.length > 0 && (

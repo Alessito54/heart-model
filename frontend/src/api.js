@@ -32,19 +32,27 @@ function networkError() {
   )
 }
 
-/** Traduce una respuesta no-OK al mensaje de error mas util que haya. */
+/**
+ * Traduce una respuesta no-OK al mensaje de error mas util que haya.
+ * El error lleva .status con el codigo HTTP, para poder distinguir casos
+ * concretos (por ejemplo, un 404 de /catalog = backend desactualizado).
+ */
 async function readError(response, fallback) {
   const detail = await response.json().catch(() => null)
+  let mensaje
   if (response.status === 422 && Array.isArray(detail?.detail)) {
     const campos = detail.detail.map((d) => d.loc?.slice(-1)[0]).filter(Boolean)
-    return new Error(
-      campos.length
-        ? `La API rechazó los datos. Revisa estos campos: ${[...new Set(campos)].join(', ')}.`
-        : 'La API rechazó los datos enviados por no cumplir las validaciones.',
-    )
+    mensaje = campos.length
+      ? `La API rechazó los datos. Revisa estos campos: ${[...new Set(campos)].join(', ')}.`
+      : 'La API rechazó los datos enviados por no cumplir las validaciones.'
+  } else if (typeof detail?.detail === 'string') {
+    mensaje = detail.detail
+  } else {
+    mensaje = fallback || `La API respondió con el estado HTTP ${response.status}.`
   }
-  if (typeof detail?.detail === 'string') return new Error(detail.detail)
-  return new Error(fallback || `La API respondió con el estado HTTP ${response.status}.`)
+  const error = new Error(mensaje)
+  error.status = response.status
+  return error
 }
 
 async function getJson(path, { headers = {}, timeout = COLD_START_MS } = {}) {

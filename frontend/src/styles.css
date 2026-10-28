@@ -462,3 +462,4 @@ pre {
 .runs-table { margin-top: 6px; }
 .runs-table td { font-size: 0.8rem; font-family: inherit; font-weight: 400; }
 .runs-table a { color: var(--accent); }
+.status-outdated .status-dot { background: var(--warn); }
