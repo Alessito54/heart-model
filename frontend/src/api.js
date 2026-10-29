@@ -152,7 +152,10 @@ export async function retrain(body, token) {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'X-Retrain-Token': token || '',
+        // trim(): un espacio o un salto de linea pegado sin querer hacia
+        // que el token no coincidiera y la API respondiera 401, sin que se
+        // viera nada raro en un campo de contrasena.
+        'X-Retrain-Token': (token || '').trim(),
       },
       body: JSON.stringify(body),
     }, 40000)
@@ -166,4 +169,7 @@ export async function retrain(body, token) {
 
 /** GET /retrain/status — últimas corridas del workflow de reentrenamiento. */
 export const retrainStatus = (token) =>
-  getJson('/retrain/status', { headers: { 'X-Retrain-Token': token || '' }, timeout: 30000 })
+  getJson('/retrain/status', {
+    headers: { 'X-Retrain-Token': (token || '').trim() },
+    timeout: 30000,
+  })

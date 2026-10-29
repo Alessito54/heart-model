@@ -109,7 +109,7 @@ export default function RetrainPanel({ health, onDone }) {
       if (tag.trim()) body.tag = tag.trim()
       if (nota.trim()) body.nota = nota.trim()
 
-      const data = await retrain(body, token)
+      const data = await retrain(body, token.trim())
       setLaunched(data)
       // El workflow tarda varios minutos; se consulta el estado enseguida para
       // que la corrida aparezca en la lista, y luego se refresca a mano.
@@ -165,6 +165,12 @@ export default function RetrainPanel({ health, onDone }) {
               value={token}
               onChange={(e) => setToken(e.target.value)}
             />
+            {token !== token.trim() && (
+              <p className="help">
+                El token tiene espacios al principio o al final. Se ignoran al
+                enviarlo.
+              </p>
+            )}
             <label className="compare compare-inline">
               <input
                 type="checkbox"
