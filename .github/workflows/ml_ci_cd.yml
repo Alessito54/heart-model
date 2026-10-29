@@ -253,8 +253,14 @@ jobs:
         echo
 
         echo "== catalogo =="
-        curl -fsS http://localhost:8000/catalog | head -c 300
+        # Se descarga a un archivo antes de recortarlo: 'curl | head -c' cierra
+        # la tuberia a mitad de la respuesta, curl sale con codigo 23 ("failed
+        # writing body") y pipefail tumba el paso. El catalogo pesa decenas de
+        # KB, asi que fallaba de forma intermitente.
+        curl -fsS http://localhost:8000/catalog -o /tmp/catalog.json
+        head -c 300 /tmp/catalog.json
         echo
+        python3 -c "import json; c = json.load(open('/tmp/catalog.json')); assert len(c['entidades']) == 32; assert len(c['meses']) == 12; assert c['jerarquia']; print('catalogo OK:', len(c['entidades']), 'entidades,', len(c['jerarquia']), 'bienes juridicos')"
 
         PAYLOAD='{"anio":2025,"mes":6,"clave_ent":9,"bien_juridico_afectado":"El patrimonio","tipo_delito":"Robo","subtipo_delito":"Robo de vehículo automotor","modalidad":"Robo de coche de 4 ruedas Con violencia"}'
         preds=""
