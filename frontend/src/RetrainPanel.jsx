@@ -16,16 +16,38 @@ const URL_FIELDS = [
   { name: 'dataseturl_100', label: 'Dataset 100 %' },
 ]
 
-// El token se guarda en sessionStorage, no en localStorage: se olvida al cerrar
-// la pestana y no queda almacenado de forma persistente en el navegador.
+// El token puede recordarse en este navegador (localStorage, sobrevive al
+// cierre de la pestana) o solo durante la sesion (sessionStorage). Nunca se
+// pone en una variable VITE_*: esas quedan incrustadas en el JavaScript
+// publico, donde cualquiera podria leer el token y lanzar construcciones.
 const TOKEN_KEY = 'retrain-token'
+const REMEMBER_KEY = 'retrain-token-remember'
 
-const readToken = () => {
+// Cada acceso va en try/catch: en modo privado o con el almacenamiento
+// bloqueado, leer o escribir lanza una excepcion.
+const safeGet = (store, key) => {
   try {
-    return sessionStorage.getItem(TOKEN_KEY) || ''
+    return store.getItem(key)
   } catch {
-    return ''
+    return null
   }
+}
+
+const readRemember = () => safeGet(localStorage, REMEMBER_KEY) !== 'no'
+
+const readToken = () =>
+  safeGet(localStorage, TOKEN_KEY) || safeGet(sessionStorage, TOKEN_KEY) || ''
+
+/** Guarda el token donde corresponda y limpia el otro almacen. */
+function persistToken(token, remember) {
+  const destino = remember ? localStorage : sessionStorage
+  const otro = remember ? sessionStorage : localStorage
+  try {
+    otro.removeItem(TOKEN_KEY)
+    localStorage.setItem(REMEMBER_KEY, remember ? 'si' : 'no')
+    if (token) destino.setItem(TOKEN_KEY, token)
+    else destino.removeItem(TOKEN_KEY)
+  } catch { /* almacenamiento no disponible: seguir sin guardar */ }
 }
 
 const RUN_LABEL = {
@@ -39,6 +61,7 @@ const CONCLUSION_LABEL = {
 
 export default function RetrainPanel({ health, onDone }) {
   const [token, setToken] = useState(readToken)
+  const [remember, setRemember] = useState(readRemember)
   const [urls, setUrls] = useState(CLOUDINARY)
   const [tag, setTag] = useState('')
   const [nota, setNota] = useState('')
@@ -50,12 +73,7 @@ export default function RetrainPanel({ health, onDone }) {
 
   const enabled = health?.retrain_enabled === true
 
-  useEffect(() => {
-    try {
-      if (token) sessionStorage.setItem(TOKEN_KEY, token)
-      else sessionStorage.removeItem(TOKEN_KEY)
-    } catch { /* modo privado: seguir sin guardar */ }
-  }, [token])
+  useEffect(() => { persistToken(token, remember) }, [token, remember])
 
   async function loadRuns() {
     setLoadingRuns(true)
@@ -147,10 +165,21 @@ export default function RetrainPanel({ health, onDone }) {
               value={token}
               onChange={(e) => setToken(e.target.value)}
             />
+            <label className="compare compare-inline">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+              />
+              <span>Recordar en este navegador</span>
+            </label>
             <p className="help">
-              Se envía en la cabecera <code>X-Retrain-Token</code> y se guarda solo
-              en esta pestaña del navegador. No es la clave de Cloudinary ni la de
-              GitHub.
+              Se envía en la cabecera <code>X-Retrain-Token</code>. Es el valor de
+              la variable <code>RETRAIN_TOKEN</code> del backend, no la clave de
+              Cloudinary ni la de GitHub. Si marcas la casilla queda guardado en
+              este navegador; si no, se olvida al cerrar la pestaña. No lo pongas
+              en una variable <code>VITE_*</code>: esas quedan incrustadas en el
+              JavaScript público.
             </p>
           </div>
 
