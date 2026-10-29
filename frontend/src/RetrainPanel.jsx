@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { retrain, retrainStatus } from './api.js'
 
 // URLs publicas de los datasets en Cloudinary (solo lectura: son archivos
@@ -16,39 +16,11 @@ const URL_FIELDS = [
   { name: 'dataseturl_100', label: 'Dataset 100 %' },
 ]
 
-// El token puede recordarse en este navegador (localStorage, sobrevive al
-// cierre de la pestana) o solo durante la sesion (sessionStorage). Nunca se
-// pone en una variable VITE_*: esas quedan incrustadas en el JavaScript
-// publico, donde cualquiera podria leer el token y lanzar construcciones.
-const TOKEN_KEY = 'retrain-token'
-const REMEMBER_KEY = 'retrain-token-remember'
-
-// Cada acceso va en try/catch: en modo privado o con el almacenamiento
-// bloqueado, leer o escribir lanza una excepcion.
-const safeGet = (store, key) => {
-  try {
-    return store.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-const readRemember = () => safeGet(localStorage, REMEMBER_KEY) !== 'no'
-
-const readToken = () =>
-  safeGet(localStorage, TOKEN_KEY) || safeGet(sessionStorage, TOKEN_KEY) || ''
-
-/** Guarda el token donde corresponda y limpia el otro almacen. */
-function persistToken(token, remember) {
-  const destino = remember ? localStorage : sessionStorage
-  const otro = remember ? sessionStorage : localStorage
-  try {
-    otro.removeItem(TOKEN_KEY)
-    localStorage.setItem(REMEMBER_KEY, remember ? 'si' : 'no')
-    if (token) destino.setItem(TOKEN_KEY, token)
-    else destino.removeItem(TOKEN_KEY)
-  } catch { /* almacenamiento no disponible: seguir sin guardar */ }
-}
+// El token no se guarda en ninguna parte: ni en localStorage, ni en
+// sessionStorage, ni en una variable VITE_*. Se escribe cada vez. Guardarlo
+// hacia que el campo se autorrellenara con un valor viejo tras cambiar
+// RETRAIN_TOKEN en el backend y, al ser un campo de contrasena, no habia
+// forma de notarlo: la API respondia 401 sin que se viera nada raro.
 
 const RUN_LABEL = {
   queued: 'En cola', in_progress: 'En ejecución', completed: 'Terminada',
@@ -60,8 +32,7 @@ const CONCLUSION_LABEL = {
 }
 
 export default function RetrainPanel({ health, onDone }) {
-  const [token, setToken] = useState(readToken)
-  const [remember, setRemember] = useState(readRemember)
+  const [token, setToken] = useState('')
   const [urls, setUrls] = useState(CLOUDINARY)
   const [tag, setTag] = useState('')
   const [nota, setNota] = useState('')
@@ -72,8 +43,6 @@ export default function RetrainPanel({ health, onDone }) {
   const [loadingRuns, setLoadingRuns] = useState(false)
 
   const enabled = health?.retrain_enabled === true
-
-  useEffect(() => { persistToken(token, remember) }, [token, remember])
 
   async function loadRuns() {
     setLoadingRuns(true)
@@ -171,21 +140,11 @@ export default function RetrainPanel({ health, onDone }) {
                 enviarlo.
               </p>
             )}
-            <label className="compare compare-inline">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-              />
-              <span>Recordar en este navegador</span>
-            </label>
             <p className="help">
               Se envía en la cabecera <code>X-Retrain-Token</code>. Es el valor de
               la variable <code>RETRAIN_TOKEN</code> del backend, no la clave de
-              Cloudinary ni la de GitHub. Si marcas la casilla queda guardado en
-              este navegador; si no, se olvida al cerrar la pestaña. No lo pongas
-              en una variable <code>VITE_*</code>: esas quedan incrustadas en el
-              JavaScript público.
+              Cloudinary ni la de GitHub. No se guarda en el navegador: hay que
+              escribirlo cada vez.
             </p>
           </div>
 
